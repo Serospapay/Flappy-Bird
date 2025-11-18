@@ -7,7 +7,7 @@
 
 import pygame
 import math
-from game_config import GameConfig
+from src.game_config import GameConfig
 
 class Bird:
     """Клас птаха (гравець)."""

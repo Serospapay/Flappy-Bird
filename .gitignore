@@ -39,6 +39,21 @@ Thumbs.db
 
 # Game saves
 save_data.json
+*.json
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+
+# Directories
+src/__pycache__/
+systems/__pycache__/
+effects/__pycache__/
+ui/__pycache__/
+utils/__pycache__/
 
 # Logs
 *.log

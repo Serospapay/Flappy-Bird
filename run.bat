@@ -23,7 +23,7 @@ echo.
 echo Запуск гри...
 echo.
 
-python game.py
+python src\game.py
 
 if errorlevel 1 (
     echo.

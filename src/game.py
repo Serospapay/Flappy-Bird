@@ -10,19 +10,26 @@ import pygame
 import sys
 import time
 import random
-from bird import Bird
-from pipe import PipeManager
-from game_config import GameConfig
-from save_system import SaveSystem
-from sound_manager import SoundManager
-from achievements import AchievementSystem
-from particles import ParticleSystem
-from powerups import PowerUpManager
-from background import ParallaxBackground
-from difficulty_manager import DifficultyManager
-from ui_elements import Button, Text, Panel
-from camera_effects import CameraEffects
-from score_animation import ScoreAnimationSystem
+import os
+
+# Додаємо батьківську директорію до шляху для імпортів
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+from src.bird import Bird
+from src.pipe import PipeManager
+from src.game_config import GameConfig
+from systems.save_system import SaveSystem
+from systems.sound_manager import SoundManager
+from systems.achievements import AchievementSystem
+from effects.particles import ParticleSystem
+from systems.powerups import PowerUpManager
+from systems.background import ParallaxBackground
+from systems.difficulty_manager import DifficultyManager
+from ui.ui_elements import Button, Text, Panel
+from effects.camera_effects import CameraEffects
+from effects.score_animation import ScoreAnimationSystem
+from effects.flash_effects import FlashSystem
+from utils.cache_manager import CacheManager
 
 class FlappyBirdGame:
     """Головний клас гри Flappy Bird."""
@@ -50,6 +57,8 @@ class FlappyBirdGame:
         self.difficulty_manager = DifficultyManager(self.config)
         self.camera_effects = CameraEffects()
         self.score_animations = ScoreAnimationSystem()
+        self.flash_system = FlashSystem()
+        self.cache_manager = CacheManager()
         
         # Стани гри: 'menu', 'playing', 'paused', 'game_over', 'settings', 'achievements', 'statistics'
         self.state = 'menu'
@@ -279,6 +288,7 @@ class FlappyBirdGame:
         # Оновлення ефектів камери та анімацій
         self.camera_effects.update()
         self.score_animations.update()
+        self.flash_system.update()
         
         if self.state == 'playing' and not self.paused:
             if self.bird is None or self.pipe_manager is None or self.powerup_manager is None:
@@ -335,6 +345,18 @@ class FlappyBirdGame:
             else:
                 self.last_collision = False
                 self.perfect_run += 1
+                
+                # Перевірка наближення до труби (небезпека)
+                if self.pipe_manager and self.pipe_manager.pipes:
+                    try:
+                        closest_pipe = min(self.pipe_manager.pipes, 
+                                         key=lambda p: abs(p.x - self.bird.x) if p.x + p.width > self.bird.x else float('inf'))
+                        if closest_pipe and closest_pipe.x - self.bird.x < 100 and closest_pipe.x - self.bird.x > 0:
+                            # Близько до труби - червоний flash
+                            if pygame.time.get_ticks() % 500 < 16:  # Кожні 0.5 секунди
+                                self.flash_system.add_danger_flash()
+                    except (ValueError, AttributeError):
+                        pass  # Немає валідних труб
             
             # Перевірка виходу за межі екрану
             if self.bird.y + self.bird.height > self.config.SCREEN_HEIGHT or self.bird.y < 0:
@@ -371,6 +393,10 @@ class FlappyBirdGame:
                 )
                 
                 self.sound_manager.play_sound('coin')
+                
+                # Короткий flash при наборі очок (тільки для подвійних очок)
+                if actual_increase >= 2:
+                    self.flash_system.add_score_flash()
             
             # Спорадична генерація power-ups
             if len(collected_powerups) == 0 and len(self.powerup_manager.powerups) == 0:
@@ -404,6 +430,8 @@ class FlappyBirdGame:
             for ach_id in new_achievements:
                 SaveSystem.unlock_achievement(self.save_data, ach_id)
                 self.sound_manager.play_sound('achievement')
+                # Flash ефект при досягненні
+                self.flash_system.add_achievement_flash()
                 
     def game_over(self):
         """Обробка завершення гри."""
@@ -420,6 +448,8 @@ class FlappyBirdGame:
         # Перевірка нового рекорду
         if self.score > self.best_score:
             self.best_score = self.score
+            # Flash ефект при новому рекорді
+            self.flash_system.add_record_flash()
         
         # Збереження даних
         SaveSystem.save(self.save_data)
@@ -543,6 +573,9 @@ class FlappyBirdGame:
                         shadow=True, shadow_color=(0, 0, 0))
         coin_text.draw(self.screen, (self.config.SCREEN_WIDTH - 70, 27), center=True)
         
+        # Flash ефекти
+        self.flash_system.draw(self.screen)
+        
         # Fade overlay (для переходів)
         self.camera_effects.draw_fade(self.screen)
         
@@ -553,6 +586,9 @@ class FlappyBirdGame:
     def draw_game_over(self):
         """Малювання екрану Game Over з покращеним візуальним оформленням."""
         self.draw_game()
+        
+        # Flash ефекти на екрані game over
+        self.flash_system.draw(self.screen)
         
         # Overlay з градієнтом
         overlay = pygame.Surface((self.config.SCREEN_WIDTH, self.config.SCREEN_HEIGHT), pygame.SRCALPHA)

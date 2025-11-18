@@ -8,6 +8,23 @@
 import pygame
 import math
 
+# Глобальний менеджер кешу (створюється при першому використанні)
+_cache_manager = None
+
+def get_cache_manager():
+    """Отримати глобальний менеджер кешу."""
+    global _cache_manager
+    if _cache_manager is None:
+        try:
+            import sys
+            import os
+            sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+            from utils.cache_manager import CacheManager
+            _cache_manager = CacheManager()
+        except ImportError:
+            _cache_manager = None
+    return _cache_manager
+
 class Button:
     """Стилізована кнопка з hover ефектами."""
     
@@ -258,7 +275,7 @@ class Panel:
         
     def draw(self, screen):
         """
-        Малювання панелі.
+        Малювання панелі з використанням кешування.
         
         Args:
             screen: pygame.Surface - Екран для малювання
@@ -270,24 +287,33 @@ class Panel:
             shadow_surface.fill((0, 0, 0, 100))
             screen.blit(shadow_surface, shadow_rect)
         
-        # Панель з градієнтом
-        panel_surface = pygame.Surface((self.rect.width, self.rect.height), pygame.SRCALPHA)
-        
-        # Градієнт фону
-        for y in range(self.rect.height):
-            ratio = y / self.rect.height
-            r = int(self.bg_color[0] * (1 + ratio * 0.3))
-            g = int(self.bg_color[1] * (1 + ratio * 0.3))
-            b = int(self.bg_color[2] * (1 + ratio * 0.3))
-            r = min(255, r)
-            g = min(255, g)
-            b = min(255, b)
-            pygame.draw.line(panel_surface, (r, g, b, self.alpha), (0, y), (self.rect.width, y))
-        
-        # Межа
-        pygame.draw.rect(panel_surface, self.border_color, 
-                        (0, 0, self.rect.width, self.rect.height), 
-                        self.border_width)
+        # Спробувати отримати з кешу
+        cache = get_cache_manager()
+        if cache:
+            panel_surface = cache.get_panel_surface(
+                self.rect.width, self.rect.height,
+                self.bg_color, self.alpha,
+                self.border_color, self.border_width
+            )
+        else:
+            # Fallback - малювання без кешу
+            panel_surface = pygame.Surface((self.rect.width, self.rect.height), pygame.SRCALPHA)
+            
+            # Градієнт фону
+            for y in range(self.rect.height):
+                ratio = y / max(1, self.rect.height)
+                r = int(self.bg_color[0] * (1 + ratio * 0.3))
+                g = int(self.bg_color[1] * (1 + ratio * 0.3))
+                b = int(self.bg_color[2] * (1 + ratio * 0.3))
+                r = min(255, r)
+                g = min(255, g)
+                b = min(255, b)
+                pygame.draw.line(panel_surface, (r, g, b, self.alpha), (0, y), (self.rect.width, y))
+            
+            # Межа
+            pygame.draw.rect(panel_surface, self.border_color, 
+                            (0, 0, self.rect.width, self.rect.height), 
+                            self.border_width)
         
         screen.blit(panel_surface, self.rect)
 

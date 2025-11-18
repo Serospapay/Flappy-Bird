@@ -46,29 +46,77 @@ class SaveSystem:
             try:
                 with open(SaveSystem.SAVE_FILE, 'r', encoding='utf-8') as f:
                     data = json.load(f)
+                    # Валідація даних
+                    if not isinstance(data, dict):
+                        return SaveSystem.DEFAULT_DATA.copy()
+                    
                     # Об'єднання з дефолтними даними для нових полів
                     default = SaveSystem.DEFAULT_DATA.copy()
                     default.update(data)
-                    if "statistics" not in default:
+                    
+                    # Валідація статистики
+                    if "statistics" not in default or not isinstance(default["statistics"], dict):
                         default["statistics"] = SaveSystem.DEFAULT_DATA["statistics"].copy()
+                    
+                    # Валідація налаштувань
+                    if "settings" not in default or not isinstance(default["settings"], dict):
+                        default["settings"] = SaveSystem.DEFAULT_DATA["settings"].copy()
+                    
+                    # Валідація досягнень
+                    if "achievements" not in default or not isinstance(default["achievements"], list):
+                        default["achievements"] = []
+                    
+                    # Валідація топ-результатів
+                    if "top_scores" not in default or not isinstance(default["top_scores"], list):
+                        default["top_scores"] = []
+                    
                     return default
-            except (json.JSONDecodeError, IOError):
+            except (json.JSONDecodeError, IOError, ValueError) as e:
+                # Логування помилки (можна додати logging)
+                print(f"Помилка завантаження збереження: {e}")
                 return SaveSystem.DEFAULT_DATA.copy()
         return SaveSystem.DEFAULT_DATA.copy()
     
     @staticmethod
     def save(data):
         """
-        Збереження даних.
+        Збереження даних з валідацією.
         
         Args:
             data: dict - Дані для збереження
         """
+        if not isinstance(data, dict):
+            print("Помилка: дані для збереження не є словником")
+            return
+        
         try:
+            # Валідація основних полів перед збереженням
+            validated_data = SaveSystem.DEFAULT_DATA.copy()
+            validated_data.update(data)
+            
+            # Валідація числових значень
+            if "best_score" in validated_data:
+                validated_data["best_score"] = max(0, int(validated_data.get("best_score", 0)))
+            
+            if "total_games" in validated_data:
+                validated_data["total_games"] = max(0, int(validated_data.get("total_games", 0)))
+            
+            if "total_score" in validated_data:
+                validated_data["total_score"] = max(0, int(validated_data.get("total_score", 0)))
+            
+            # Валідація налаштувань
+            if "settings" in validated_data and isinstance(validated_data["settings"], dict):
+                settings = validated_data["settings"]
+                if "music_volume" in settings:
+                    settings["music_volume"] = max(0.0, min(1.0, float(settings["music_volume"])))
+                if "sfx_volume" in settings:
+                    settings["sfx_volume"] = max(0.0, min(1.0, float(settings["sfx_volume"])))
+            
             with open(SaveSystem.SAVE_FILE, 'w', encoding='utf-8') as f:
-                json.dump(data, f, indent=2, ensure_ascii=False)
-        except IOError:
-            pass  # Якщо не вдалося зберегти, продовжуємо гру
+                json.dump(validated_data, f, indent=2, ensure_ascii=False)
+        except (IOError, ValueError, TypeError) as e:
+            print(f"Помилка збереження даних: {e}")
+            # Продовжуємо гру навіть якщо не вдалося зберегти
     
     @staticmethod
     def update_statistics(data, score, time_played=0, coins=0):

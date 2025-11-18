@@ -7,6 +7,13 @@
 
 import pygame
 import random
+import sys
+import os
+
+# Додаємо батьківську директорію до шляху для імпортів
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+from src.game_config import GameConfig
 
 class Pipe:
     """Клас однієї труби."""
