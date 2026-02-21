@@ -17,9 +17,9 @@ try:
     print(f"[OK] pygame imported successfully: {pygame.__version__}")
 except ImportError as e:
     print(f"[ERROR] Import error: {e}")
-    print("   Try to install: pip install pygame-ce")
+    print("   Try: pip install -r requirements.txt")
     sys.exit(1)
 
 print("\nAll dependencies are installed correctly!")
-print("You can run the game: python game.py")
+print("You can run the game: python src/game.py")
 

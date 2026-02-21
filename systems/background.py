@@ -69,39 +69,39 @@ class ParallaxLayer:
 class ParallaxBackground:
     """Паралакс фон з багатьма шарами."""
     
-    def __init__(self, screen_width, screen_height):
-        """
-        Ініціалізація паралакс фону.
-        
-        Args:
-            screen_width: int - Ширина екрану
-            screen_height: int - Висота екрану
-        """
+    THEMES = {
+        "light": [
+            ((135, 206, 250), 0.1),  # Небесно-блакитний
+            ((173, 216, 230), 0.3),
+            ((176, 224, 230), 0.5),
+            ((230, 230, 250), 0.8),
+        ],
+        "dark": [
+            ((25, 35, 55), 0.1),   # Темно-синій
+            ((35, 50, 80), 0.3),
+            ((45, 65, 95), 0.5),
+            ((60, 80, 110), 0.8),
+        ],
+    }
+    
+    def __init__(self, screen_width, screen_height, theme="light"):
         self.screen_width = screen_width
         self.screen_height = screen_height
-        
-        # Створення шарів (від найдальшого до найближчого)
+        self.theme = theme
+        self._build_layers()
+    
+    def _build_layers(self):
+        colors = ParallaxBackground.THEMES.get(self.theme, ParallaxBackground.THEMES["light"])
+        sw, sh = self.screen_width, self.screen_height
+        c1, s1 = colors[0]
+        c2, s2 = colors[1]
+        c3, s3 = colors[2]
+        c4, s4 = colors[3]
         self.layers = [
-            ParallaxLayer(
-                screen_width, screen_height,
-                (135, 206, 250),  # Небесно-блакитний (фон)
-                0.1, 0
-            ),
-            ParallaxLayer(
-                screen_width, screen_height // 2,
-                (173, 216, 230),  # Світло-блакитний (дальні хмари)
-                0.3, 0
-            ),
-            ParallaxLayer(
-                screen_width, screen_height // 3,
-                (176, 224, 230),  # Порошково-блакитний (середні хмари)
-                0.5, screen_height // 4
-            ),
-            ParallaxLayer(
-                screen_width, screen_height // 4,
-                (230, 230, 250),  # Лавандовий (ближні хмари)
-                0.8, screen_height // 2
-            )
+            ParallaxLayer(sw, sh, c1, s1, 0),
+            ParallaxLayer(sw, sh // 2, c2, s2, 0),
+            ParallaxLayer(sw, sh // 3, c3, s3, sh // 4),
+            ParallaxLayer(sw, sh // 4, c4, s4, sh // 2),
         ]
     
     def update(self, delta_x):
@@ -114,13 +114,14 @@ class ParallaxBackground:
         for layer in self.layers:
             layer.update(delta_x)
     
+    def set_theme(self, theme):
+        """Зміна теми (light/dark)."""
+        if theme != self.theme:
+            self.theme = theme
+            self._build_layers()
+    
     def draw(self, screen):
-        """
-        Малювання всіх шарів.
-        
-        Args:
-            screen: pygame.Surface - Екран для малювання
-        """
+        """Малювання всіх шарів."""
         for layer in self.layers:
             layer.draw(screen)
 

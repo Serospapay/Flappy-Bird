@@ -12,15 +12,17 @@ from src.game_config import GameConfig
 class Bird:
     """Клас птаха (гравець)."""
     
-    def __init__(self, x, y):
+    def __init__(self, x, y, skin_id="default"):
         """
         Ініціалізація птаха.
         
         Args:
             x: Початкова координата X
             y: Початкова координата Y
+            skin_id: str - ID скіна птаха
         """
         self.config = GameConfig()
+        self.skin_id = skin_id
         
         self.x = x
         self.y = y
@@ -30,9 +32,29 @@ class Bird:
         self.velocity = 0
         self.rotation = 0
         
+        # Dash
+        self.dash_cooldown = 0
+        
+        # Ghost (з power-up)
+        self.ghost_active = False
+        self.ghost_duration = 0
+        
     def jump(self):
         """Стрибок птаха."""
         self.velocity = self.config.JUMP_STRENGTH
+    
+    def dash(self):
+        """Ривок вгору (на клавішу вниз або подвійний стрибок)."""
+        if self.dash_cooldown <= 0:
+            self.velocity = self.config.DASH_SPEED
+            self.dash_cooldown = self.config.DASH_COOLDOWN
+            return True
+        return False
+    
+    def activate_ghost(self, duration=None):
+        """Активація режиму привида (прохід крізь труби)."""
+        self.ghost_active = True
+        self.ghost_duration = duration or self.config.GHOST_DURATION
         
     def update(self):
         """Оновлення позиції та фізики птаха."""
@@ -45,6 +67,16 @@ class Bird:
         # Обмеження максимальної швидкості падіння
         if self.velocity > 15:
             self.velocity = 15
+        
+        # Dash cooldown
+        if self.dash_cooldown > 0:
+            self.dash_cooldown -= 1
+        
+        # Ghost duration
+        if self.ghost_active and self.ghost_duration > 0:
+            self.ghost_duration -= 1
+            if self.ghost_duration <= 0:
+                self.ghost_active = False
             
         # Ротація в залежності від швидкості
         self.rotation = min(30, max(-90, self.velocity * 3))
@@ -71,35 +103,24 @@ class Bird:
                                        self.width + 2, self.height + 2)
             pygame.draw.ellipse(bird_surface, (0, 0, 0, shadow_alpha), shadow_ellipse)
         
-        # Основне тіло птаха - сучасніший дизайн
+        # Кольори зі скіна
+        try:
+            from systems.skins import SkinSystem
+            c = SkinSystem.get_colors(self.skin_id)
+            body_colors = [c[1], c[0], c[3], c[2]]  # light, main, accent, dark
+        except ImportError:
+            body_colors = [(255, 240, 180), (255, 220, 100), (255, 200, 50), (255, 180, 30)]
+        
+        # Ghost ефект - напівпрозорість
+        draw_alpha = 180 if self.ghost_active else 255
+        if self.ghost_active and hasattr(self, 'ghost_duration') and self.ghost_duration > 0:
+            pulse = int(30 * abs(math.sin(pygame.time.get_ticks() * 0.02)))
+            draw_alpha = 150 + pulse
+        
+        # Основне тіло птаха — заповнений еліпс (без квадратного ореолу)
         body_rect = pygame.Rect(offset_x, offset_y, self.width, self.height)
-        
-        # Градієнт для тіла (від світлого до темного)
-        body_colors = [
-            (255, 240, 180),  # Світло-жовтий верх
-            (255, 220, 100),  # Жовтий
-            (255, 200, 50),   # Золотий
-            (255, 180, 30),   # Темніший золотий
-        ]
-        
-        for y in range(self.height):
-            ratio = y / self.height
-            # Плавний перехід кольорів
-            if ratio < 0.25:
-                color = body_colors[0]
-            elif ratio < 0.5:
-                t = (ratio - 0.25) / 0.25
-                color = tuple(int(body_colors[0][i] * (1-t) + body_colors[1][i] * t) for i in range(3))
-            elif ratio < 0.75:
-                t = (ratio - 0.5) / 0.25
-                color = tuple(int(body_colors[1][i] * (1-t) + body_colors[2][i] * t) for i in range(3))
-            else:
-                t = (ratio - 0.75) / 0.25
-                color = tuple(int(body_colors[2][i] * (1-t) + body_colors[3][i] * t) for i in range(3))
-            
-            pygame.draw.line(bird_surface, color, 
-                           (body_rect.left, body_rect.top + y),
-                           (body_rect.right, body_rect.top + y))
+        main_color = body_colors[1]
+        pygame.draw.ellipse(bird_surface, main_color, body_rect)
         
         # Світлий відблиск на верхній частині (більш реалістичний)
         highlight_rect = pygame.Rect(offset_x + 6, offset_y + 4, self.width - 12, self.height // 2)
@@ -130,8 +151,9 @@ class Bird:
             (offset_x + self.width // 2 - 12, offset_y + self.height // 2 - 6),
             (offset_x + self.width // 2 - 5, offset_y + self.height // 2 - 2),
         ]
-        pygame.draw.polygon(bird_surface, (255, 190, 80), upper_wing)
-        pygame.draw.polygon(bird_surface, (230, 170, 60), upper_wing, 2)
+        wing_color = body_colors[2] if len(body_colors) > 2 else (255, 190, 80)
+        pygame.draw.polygon(bird_surface, wing_color, upper_wing)
+        pygame.draw.polygon(bird_surface, body_colors[3] if len(body_colors) > 3 else (230, 170, 60), upper_wing, 2)
         
         # Нижнє крило (менше)
         lower_wing = [
@@ -139,8 +161,8 @@ class Bird:
             (offset_x + self.width // 2 - 12, offset_y + self.height // 2 + 6),
             (offset_x + self.width // 2 - 8, offset_y + self.height // 2 + 4),
         ]
-        pygame.draw.polygon(bird_surface, (240, 180, 70), lower_wing)
-        pygame.draw.polygon(bird_surface, (220, 160, 50), lower_wing, 1)
+        pygame.draw.polygon(bird_surface, tuple(min(255, c + 20) for c in wing_color), lower_wing)
+        pygame.draw.polygon(bird_surface, wing_color, lower_wing, 1)
         
         # Дзьоб з покращеною деталізацією
         beak_base_x = offset_x + self.width
@@ -228,6 +250,10 @@ class Bird:
             ]
             pygame.draw.polygon(bird_surface, (240, 200, 90), tail_points)
             pygame.draw.polygon(bird_surface, (220, 180, 70), tail_points, 1)
+        
+        # Ghost - напівпрозорість
+        if draw_alpha < 255:
+            bird_surface.set_alpha(draw_alpha)
         
         # Ротація з антиаліасингом
         rotated_surface = pygame.transform.rotate(bird_surface, -self.rotation)

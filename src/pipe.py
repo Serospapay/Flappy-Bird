@@ -19,10 +19,12 @@ class Pipe:
     """Клас однієї труби."""
     
     TYPE_NORMAL = "normal"
-    TYPE_MOVING = "moving"  # Рухома труба
-    TYPE_SHRINKING = "shrinking"  # Труба що зменшується
+    TYPE_MOVING = "moving"
+    TYPE_SHRINKING = "shrinking"
+    TYPE_SPIKES = "spikes"  # Шипи на краях проміжку
+    TYPE_SPLIT = "split"  # Роздвоєний проміжок (верх/низ)
     
-    def __init__(self, x, gap_y, gap_size, config, pipe_type=TYPE_NORMAL):
+    def __init__(self, x, gap_y, gap_size, config, pipe_type=TYPE_NORMAL, rng=None):
         """
         Ініціалізація труби.
         
@@ -50,15 +52,19 @@ class Pipe:
         self.shrink_speed = 0.3
         self.original_gap = gap_size
         
+        r = rng or random
+        self.split_offset = r.uniform(-0.3, 0.3) * gap_size if pipe_type == Pipe.TYPE_SPLIT else 0
+        
         # Верхня труба (гарантуємо int)
         self.top_height = int(gap_y)
         # Нижня труба (гарантуємо int)
         self.bottom_y = int(gap_y + gap_size)
         self.bottom_height = int(config.SCREEN_HEIGHT - self.bottom_y)
         
-    def update(self):
-        """Оновлення позиції труби."""
-        self.x -= self.config.PIPE_SPEED
+    def update(self, speed=None):
+        """Оновлення позиції труби. speed - фактична швидкість (з урахуванням slow_time)."""
+        actual_speed = speed if speed is not None else self.config.PIPE_SPEED
+        self.x -= actual_speed
         
         # Рух для рухомої труби
         if self.type == Pipe.TYPE_MOVING:
@@ -82,8 +88,19 @@ class Pipe:
             self.bottom_height = int(self.config.SCREEN_HEIGHT - self.bottom_y)
         
     def get_rects(self):
-        """Отримати прямокутники колізій (верхня та нижня труба + голови)."""
+        """Отримати прямокутники колізій (верхня та нижня труба + голови + шипи/бар'єр)."""
         rects = []
+        
+        # Шипи (TYPE_SPIKES) - маленькі трикутники на краях проміжку
+        if self.type == Pipe.TYPE_SPIKES:
+            spike_h = 15
+            rects.append(pygame.Rect(self.x, int(self.gap_y) - spike_h, self.width, spike_h))
+            rects.append(pygame.Rect(self.x, int(self.bottom_y), self.width, spike_h))
+        
+        # Бар'єр для TYPE_SPLIT - перегородка посередині проміжку
+        if self.type == Pipe.TYPE_SPLIT:
+            barrier_y = int(self.gap_y + self.gap_size * 0.4 + self.split_offset)
+            rects.append(pygame.Rect(self.x, barrier_y, self.width, 25))
         
         # Верхня труба (конвертація в int)
         rects.append(pygame.Rect(self.x, 0, self.width, int(self.top_height)))
@@ -110,123 +127,83 @@ class Pipe:
         
         return rects
         
+    def _draw_cylinder_body(self, screen, x, y, w, h, color, head_color, dark_color):
+        """Малювання тіла труби з pseudo-3D: блік зліва, тінь справа."""
+        strip_w = max(1, w // 5)
+        light = tuple(min(255, c + 45) for c in color)
+        pygame.draw.rect(screen, light, (x, y, strip_w, h))
+        pygame.draw.rect(screen, color, (x + strip_w, y, w - strip_w * 2, h))
+        pygame.draw.rect(screen, dark_color, (x + w - strip_w, y, strip_w, h))
+    
+    def _draw_cap(self, screen, x, y, w, h, color, head_color, dark_color):
+        """Шапка труби: +5px з кожного боку, 30px висота, pseudo-3D."""
+        cap_w = w + 10
+        cap_x = x - 5
+        strip_w = max(1, cap_w // 5)
+        light = tuple(min(255, c + 45) for c in head_color)
+        pygame.draw.rect(screen, light, (cap_x, y, strip_w, h))
+        pygame.draw.rect(screen, head_color, (cap_x + strip_w, y, cap_w - strip_w * 2, h))
+        pygame.draw.rect(screen, dark_color, (cap_x + cap_w - strip_w, y, strip_w, h))
+    
     def draw(self, screen):
         """
-        Малювання труби з покращеною стилізацією.
-        
-        Args:
-            screen: Екран pygame для малювання
+        Малювання труби: pseudo-3D циліндр, шапка на кінці (біля проміжку).
         """
-        # Вибір кольору в залежності від типу
         if self.type == Pipe.TYPE_MOVING:
-            color = (100, 150, 255)  # Синій
-            head_color = (50, 100, 200)  # Темно-синій
-            dark_color = (30, 70, 150)  # Темніший
+            color = (100, 150, 255)
+            head_color = (50, 100, 200)
+            dark_color = (30, 70, 150)
         elif self.type == Pipe.TYPE_SHRINKING:
-            color = (255, 150, 100)  # Помаранчевий
-            head_color = (200, 100, 50)  # Темно-помаранчевий
-            dark_color = (180, 80, 30)  # Темніший
+            color = (255, 150, 100)
+            head_color = (200, 100, 50)
+            dark_color = (180, 80, 30)
+        elif self.type == Pipe.TYPE_SPIKES:
+            color = (180, 60, 60)
+            head_color = (140, 40, 40)
+            dark_color = (100, 20, 20)
+        elif self.type == Pipe.TYPE_SPLIT:
+            color = (100, 180, 100)
+            head_color = (60, 140, 60)
+            dark_color = (40, 100, 40)
         else:
             color = self.config.PIPE_COLOR
             head_color = self.config.PIPE_HEAD_COLOR
-            dark_color = (20, 80, 20)  # Темніший зелений
+            dark_color = (20, 80, 20)
         
-        # Тінь для верхньої труби (конвертація в int для безпеки)
+        cap_h = 30
         top_height_int = int(self.top_height)
-        shadow_surface = pygame.Surface((self.width + 4, top_height_int + 4), pygame.SRCALPHA)
-        shadow_surface.fill((0, 0, 0, 60))
-        screen.blit(shadow_surface, (self.x + 2, 2))
-        
-        # Верхня труба з градієнтом (конвертація в int)
-        pipe_surface = pygame.Surface((self.width, top_height_int), pygame.SRCALPHA)
-        for y in range(top_height_int):
-            ratio = y / max(1, top_height_int)
-            r = int(color[0] * (1 - ratio * 0.4))
-            g = int(color[1] * (1 - ratio * 0.4))
-            b = int(color[2] * (1 - ratio * 0.4))
-            grad_color = (max(0, r), max(0, g), max(0, b))
-            pygame.draw.line(pipe_surface, grad_color, (0, y), (self.width, y))
-        
-        # Текстура (вертикальні смуги)
-        for i in range(0, self.width, 8):
-            pygame.draw.line(pipe_surface, dark_color, (i, 0), (i, top_height_int), 1)
-        
-        screen.blit(pipe_surface, (self.x, 0))
-        
-        # Межа верхньої труби
-        pygame.draw.rect(screen, dark_color, (self.x, 0, self.width, top_height_int), 2)
-        
-        # Голова верхньої труби з градієнтом
-        head_y = top_height_int - self.config.PIPE_HEAD_HEIGHT
-        head_surface = pygame.Surface((self.width + 10, self.config.PIPE_HEAD_HEIGHT), pygame.SRCALPHA)
-        for y in range(self.config.PIPE_HEAD_HEIGHT):
-            ratio = y / max(1, self.config.PIPE_HEAD_HEIGHT)
-            r = int(head_color[0] * (1 - ratio * 0.3))
-            g = int(head_color[1] * (1 - ratio * 0.3))
-            b = int(head_color[2] * (1 - ratio * 0.3))
-            grad_color = (max(0, r), max(0, g), max(0, b))
-            pygame.draw.line(head_surface, grad_color, (0, y), (self.width + 10, y))
-        
-        # Відблиск на голові
-        highlight_rect = pygame.Rect(2, 2, self.width + 6, self.config.PIPE_HEAD_HEIGHT // 3)
-        highlight_color = tuple(min(255, c + 30) for c in head_color)
-        pygame.draw.rect(head_surface, (*highlight_color, 150), highlight_rect)
-        
-        screen.blit(head_surface, (self.x - 5, head_y))
-        pygame.draw.rect(screen, dark_color, 
-                        (self.x - 5, head_y, self.width + 10, self.config.PIPE_HEAD_HEIGHT), 2)
-        
-        # Тінь для нижньої труби (конвертація в int)
-        bottom_height_int = int(self.bottom_height)
         bottom_y_int = int(self.bottom_y)
-        shadow_surface2 = pygame.Surface((self.width + 4, bottom_height_int + 4), pygame.SRCALPHA)
-        shadow_surface2.fill((0, 0, 0, 60))
-        screen.blit(shadow_surface2, (self.x + 2, bottom_y_int + 2))
+        bottom_height_int = int(self.bottom_height)
         
-        # Нижня труба з градієнтом
-        bottom_surface = pygame.Surface((self.width, bottom_height_int), pygame.SRCALPHA)
-        for y in range(bottom_height_int):
-            ratio = y / max(1, bottom_height_int)
-            r = int(color[0] * (1 + ratio * 0.3))
-            g = int(color[1] * (1 + ratio * 0.3))
-            b = int(color[2] * (1 + ratio * 0.3))
-            grad_color = (min(255, r), min(255, g), min(255, b))
-            pygame.draw.line(bottom_surface, grad_color, (0, y), (self.width, y))
+        # Верхня труба: тіло + шапка внизу (біля проміжку)
+        body_top_h = max(0, top_height_int - cap_h)
+        self._draw_cylinder_body(screen, self.x, 0, self.width, body_top_h, color, head_color, dark_color)
+        self._draw_cap(screen, self.x, body_top_h, self.width, cap_h, color, head_color, dark_color)
         
-        # Текстура (вертикальні смуги)
-        for i in range(0, self.width, 8):
-            pygame.draw.line(bottom_surface, dark_color, (i, 0), (i, bottom_height_int), 1)
+        # Нижня труба: шапка вгорі (біля проміжку) + тіло
+        self._draw_cap(screen, self.x, bottom_y_int, self.width, cap_h, color, head_color, dark_color)
+        body_bot_h = max(0, bottom_height_int - cap_h)
+        self._draw_cylinder_body(screen, self.x, bottom_y_int + cap_h, self.width, body_bot_h, color, head_color, dark_color)
         
-        screen.blit(bottom_surface, (self.x, bottom_y_int))
+        # Шипи (TYPE_SPIKES)
+        if self.type == Pipe.TYPE_SPIKES:
+            spike_h, spike_w = 15, 8
+            for sx in range(0, self.width, spike_w + 4):
+                pts_top = [(self.x + sx, top_height_int), (self.x + sx + spike_w//2, top_height_int - spike_h), (self.x + sx + spike_w, top_height_int)]
+                pts_bot = [(self.x + sx, bottom_y_int), (self.x + sx + spike_w//2, bottom_y_int + spike_h), (self.x + sx + spike_w, bottom_y_int)]
+                pygame.draw.polygon(screen, dark_color, pts_top)
+                pygame.draw.polygon(screen, dark_color, pts_bot)
         
-        # Межа нижньої труби
-        pygame.draw.rect(screen, dark_color, 
-                        (self.x, bottom_y_int, self.width, bottom_height_int), 2)
-        
-        # Голова нижньої труби з градієнтом
-        head_surface2 = pygame.Surface((self.width + 10, self.config.PIPE_HEAD_HEIGHT), pygame.SRCALPHA)
-        for y in range(self.config.PIPE_HEAD_HEIGHT):
-            ratio = y / max(1, self.config.PIPE_HEAD_HEIGHT)
-            r = int(head_color[0] * (1 + ratio * 0.3))
-            g = int(head_color[1] * (1 + ratio * 0.3))
-            b = int(head_color[2] * (1 + ratio * 0.3))
-            grad_color = (min(255, r), min(255, g), min(255, b))
-            pygame.draw.line(head_surface2, grad_color, (0, y), (self.width + 10, y))
-        
-        # Відблиск на голові
-        highlight_rect2 = pygame.Rect(2, 2, self.width + 6, self.config.PIPE_HEAD_HEIGHT // 3)
-        highlight_color2 = tuple(min(255, c + 30) for c in head_color)
-        pygame.draw.rect(head_surface2, (*highlight_color2, 150), highlight_rect2)
-        
-        screen.blit(head_surface2, (self.x - 5, bottom_y_int))
-        pygame.draw.rect(screen, dark_color,
-                        (self.x - 5, bottom_y_int, self.width + 10, self.config.PIPE_HEAD_HEIGHT), 2)
+        # Бар'єр (TYPE_SPLIT)
+        if self.type == Pipe.TYPE_SPLIT:
+            barrier_y = int(self.gap_y + self.gap_size * 0.4 + self.split_offset)
+            self._draw_cylinder_body(screen, self.x, barrier_y, self.width, 25, head_color, color, dark_color)
 
 
 class PipeManager:
     """Менеджер для керування всіма трубами."""
     
-    def __init__(self, config):
+    def __init__(self, config, random_gen=None):
         """
         Ініціалізація менеджера труб.
         
@@ -237,60 +214,66 @@ class PipeManager:
         self.pipes = []
         self.last_spawn_time = 0
         self.score = 0
+        self._rng = random_gen or random  # Для Daily Challenge - детермінований RNG
         
     def spawn_pipe(self, current_time, score=0):
         """Створення нової труби, якщо пройшов достатній час."""
         if current_time - self.last_spawn_time >= self.config.PIPE_SPAWN_INTERVAL:
-            gap_y = random.randint(
+            gap_y = self._rng.randint(
                 self.config.PIPE_HEAD_HEIGHT + 50,
                 self.config.SCREEN_HEIGHT - self.config.PIPE_GAP - self.config.PIPE_HEAD_HEIGHT - 50
             )
             
             # Визначення типу труби в залежності від складності
-            pipe_type = Pipe.TYPE_NORMAL
+            types_pool = [Pipe.TYPE_NORMAL]
             if score > 10:
-                # Після 10 очок з'являються рухомі труби
-                if random.random() < 0.3:  # 30% шанс
-                    pipe_type = Pipe.TYPE_MOVING
-            if score > 25:
-                # Після 25 очок з'являються труби що зменшуються
-                if random.random() < 0.2:  # 20% шанс
-                    pipe_type = Pipe.TYPE_SHRINKING
+                types_pool.extend([Pipe.TYPE_MOVING])
+            if score > 15:
+                types_pool.extend([Pipe.TYPE_SPIKES])
+            if score > 20:
+                types_pool.extend([Pipe.TYPE_SHRINKING])
+            if score > 30:
+                types_pool.extend([Pipe.TYPE_SPLIT])
+            pipe_type = self._rng.choice(types_pool)
             
             new_pipe = Pipe(
                 self.config.SCREEN_WIDTH,
                 gap_y,
                 self.config.PIPE_GAP,
                 self.config,
-                pipe_type
+                pipe_type,
+                self._rng
             )
             self.pipes.append(new_pipe)
             self.last_spawn_time = current_time
             
-    def update(self, score=0):
-        """Оновлення всіх труб."""
+    def update(self, score=0, speed=None):
+        """Оновлення всіх труб. speed - фактична швидкість (з урахуванням slow_time)."""
         current_time = pygame.time.get_ticks()
         self.spawn_pipe(current_time, score)
         
+        actual_speed = speed if speed is not None else self.config.PIPE_SPEED
+        
         # Оновлення труб
         for pipe in self.pipes[:]:
-            pipe.update()
+            pipe.update(actual_speed)
             
             # Видалення труб, що вийшли за межі екрану
             if pipe.x + pipe.width < 0:
                 self.pipes.remove(pipe)
                 
-    def check_collision(self, bird):
+    def check_collision(self, bird, ghost_active=False):
         """
         Перевірка колізій птаха з трубами.
         
         Args:
             bird: Об'єкт Bird
+            ghost_active: bool - Ghost power-up активний (прохід крізь труби)
             
         Returns:
             True якщо є колізія, False інакше
         """
-        if bird is None:
+        if bird is None or ghost_active:
             return False
             
         bird_rect = bird.get_rect()

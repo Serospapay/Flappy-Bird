@@ -5,6 +5,7 @@
 @created: 2024-12-19
 """
 
+import math
 import pygame
 import random
 import sys
@@ -41,12 +42,14 @@ class PowerUp:
             'shield': (100, 150, 255),  # Синій
             'slow_time': (150, 100, 255),  # Фіолетовий
             'double_score': (255, 200, 100),  # Помаранчевий
-            'coin': (255, 215, 0)  # Золотий
+            'coin': (255, 215, 0),  # Золотий
+            'ghost': (200, 200, 255)  # Привид - прохід крізь труби
         }
     
-    def update(self):
-        """Оновлення power-up."""
-        self.x -= self.config.PIPE_SPEED
+    def update(self, speed=None):
+        """Оновлення power-up. speed - фактична швидкість (з урахуванням slow_time)."""
+        actual_speed = speed if speed is not None else self.config.PIPE_SPEED
+        self.x -= actual_speed
         self.animation_time += 1
     
     def get_rect(self):
@@ -63,7 +66,7 @@ class PowerUp:
         color = self.colors.get(self.type, (255, 255, 255))
         
         # Анімація пульсації
-        pulse = int(5 * abs(pygame.math.sin(self.animation_time * 0.2)))
+        pulse = int(5 * abs(math.sin(self.animation_time * 0.2)))
         size = self.width + pulse
         
         # Малювання з центром
@@ -76,13 +79,14 @@ class PowerUp:
         pygame.draw.ellipse(screen, color, rect)
         pygame.draw.ellipse(screen, (255, 255, 255), rect, 2)
         
-        # Символ залежно від типу
+        # Текстове позначення залежно від типу (без emojis)
         font = pygame.font.Font(None, 24)
         symbols = {
-            'shield': '🛡',
-            'slow_time': '⏱',
-            'double_score': '✖',
-            'coin': '🪙'
+            'shield': 'S',
+            'slow_time': 'T',
+            'double_score': 'x2',
+            'coin': 'C',
+            'ghost': 'G'
         }
         symbol = symbols.get(self.type, '?')
         text = font.render(symbol, True, (255, 255, 255))
@@ -108,7 +112,8 @@ class PowerUpManager:
         self.active_effects = {
             'shield': {'active': False, 'duration': 0},
             'slow_time': {'active': False, 'duration': 0},
-            'double_score': {'active': False, 'duration': 0}
+            'double_score': {'active': False, 'duration': 0},
+            'ghost': {'active': False, 'duration': 0, 'max_duration': 90}
         }
     
     def spawn_powerup(self, x, y):
@@ -119,17 +124,18 @@ class PowerUpManager:
             x: float - Координата X
             y: float - Координата Y
         """
-        types = ['shield', 'slow_time', 'double_score', 'coin']
+        types = ['shield', 'slow_time', 'double_score', 'coin', 'ghost']
         powerup_type = random.choice(types)
         
         powerup = PowerUp(x, y, powerup_type, self.config)
         self.powerups.append(powerup)
     
-    def update(self, current_time):
-        """Оновлення power-ups та ефектів."""
+    def update(self, current_time, speed=None):
+        """Оновлення power-ups та ефектів. speed - фактична швидкість (з урахуванням slow_time)."""
+        actual_speed = speed if speed is not None else self.config.PIPE_SPEED
         # Оновлення power-ups
         for powerup in self.powerups[:]:
-            powerup.update()
+            powerup.update(actual_speed)
             if powerup.x + powerup.width < 0:
                 self.powerups.remove(powerup)
         
@@ -167,6 +173,8 @@ class PowerUpManager:
                     self.activate_slow_time()
                 elif powerup.type == 'double_score':
                     self.activate_double_score()
+                elif powerup.type == 'ghost':
+                    self.activate_ghost()
                 
                 self.powerups.remove(powerup)
         
@@ -207,6 +215,16 @@ class PowerUpManager:
         """Перевірка, чи активні подвійні очки."""
         return self.active_effects['double_score']['active']
     
+    def activate_ghost(self):
+        """Активація режиму привида (прохід крізь труби)."""
+        self.active_effects['ghost']['active'] = True
+        self.active_effects['ghost']['duration'] = 90
+        self.active_effects['ghost']['max_duration'] = 90
+    
+    def is_ghost_active(self):
+        """Перевірка, чи активний ghost."""
+        return self.active_effects['ghost']['active']
+    
     def get_speed_multiplier(self):
         """Отримати множник швидкості (для повільного часу)."""
         return 0.5 if self.is_slow_time_active() else 1.0
@@ -226,16 +244,20 @@ class PowerUpManager:
         font = pygame.font.Font(None, 24)
         
         if self.active_effects['shield']['active']:
-            text = font.render("🛡 SHIELD", True, (100, 150, 255))
+            text = font.render("[S] SHIELD", True, (100, 150, 255))
             screen.blit(text, (10, y_offset))
             y_offset += 30
         
         if self.active_effects['slow_time']['active']:
-            text = font.render("⏱ SLOW TIME", True, (150, 100, 255))
+            text = font.render("[T] SLOW TIME", True, (150, 100, 255))
             screen.blit(text, (10, y_offset))
             y_offset += 30
         
         if self.active_effects['double_score']['active']:
-            text = font.render("✖ DOUBLE SCORE", True, (255, 200, 100))
+            text = font.render("[x2] DOUBLE SCORE", True, (255, 200, 100))
+            screen.blit(text, (10, y_offset))
+            y_offset += 30
+        if self.active_effects['ghost']['active']:
+            text = font.render("[G] GHOST", True, (200, 200, 255))
             screen.blit(text, (10, y_offset))
 

@@ -9,6 +9,11 @@ import json
 import os
 from datetime import datetime
 
+try:
+    from systems.skins import SkinSystem
+except ImportError:
+    SkinSystem = None
+
 class SaveSystem:
     """Клас для роботи зі збереженням даних."""
     
@@ -19,18 +24,21 @@ class SaveSystem:
         "total_games": 0,
         "total_score": 0,
         "achievements": [],
+        "unlocked_skins": ["default"],
+        "equipped_skin": "default",
         "top_scores": [],  # Топ-5 рекордів: [{"score": int, "coins": int, "date": str}, ...]
         "settings": {
             "music_volume": 0.5,
             "sfx_volume": 0.7,
             "difficulty": "normal",
-            "theme": "default"
+            "theme": "light"
         },
         "statistics": {
             "best_score": 0,
             "average_score": 0.0,
             "total_time_played": 0,
-            "coins_collected": 0
+            "coins_collected": 0,
+            "powerups_used": 0
         }
     }
     
@@ -66,9 +74,14 @@ class SaveSystem:
                     if "achievements" not in default or not isinstance(default["achievements"], list):
                         default["achievements"] = []
                     
-                    # Валідація топ-результатів
                     if "top_scores" not in default or not isinstance(default["top_scores"], list):
                         default["top_scores"] = []
+                    if "unlocked_skins" not in default or not isinstance(default["unlocked_skins"], list):
+                        default["unlocked_skins"] = ["default"]
+                    if "default" not in default["unlocked_skins"]:
+                        default["unlocked_skins"].insert(0, "default")
+                    if SkinSystem and ("equipped_skin" not in default or default.get("equipped_skin") not in getattr(SkinSystem, "SKINS", {})):
+                        default["equipped_skin"] = "default"
                     
                     return default
             except (json.JSONDecodeError, IOError, ValueError) as e:
@@ -119,7 +132,7 @@ class SaveSystem:
             # Продовжуємо гру навіть якщо не вдалося зберегти
     
     @staticmethod
-    def update_statistics(data, score, time_played=0, coins=0):
+    def update_statistics(data, score, time_played=0, coins=0, powerups_used=0):
         """
         Оновлення статистики після гри.
         
@@ -128,6 +141,7 @@ class SaveSystem:
             score: int - Рахунок гри
             time_played: int - Час гри в секундах
             coins: int - Зібрані монети
+            powerups_used: int - Використані power-ups в цій грі
         """
         stats = data.setdefault("statistics", {})
         
@@ -168,6 +182,9 @@ class SaveSystem:
         
         # Оновлення монет
         stats["coins_collected"] = stats.get("coins_collected", 0) + coins
+        
+        # Оновлення використаних power-ups
+        stats["powerups_used"] = stats.get("powerups_used", 0) + powerups_used
     
     @staticmethod
     def unlock_achievement(data, achievement_id):

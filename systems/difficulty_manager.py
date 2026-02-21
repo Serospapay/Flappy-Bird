@@ -12,6 +12,7 @@ import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from src.game_config import GameConfig
+from src.pipe import Pipe
 
 class DifficultyManager:
     """Менеджер динамічної складності."""
@@ -88,8 +89,9 @@ class DifficultyManager:
         self.config.PIPE_SPEED = params['speed']
         self.config.PIPE_SPAWN_INTERVAL = params['spawn_interval']
         
-        # Оновлення параметрів існуючих труб
+        # Оновлення параметрів існуючих труб (крім SHRINKING - вони зменшуються самостійно)
         for pipe in pipe_manager.pipes:
-            pipe.gap_size = params['gap']
+            if pipe.type != Pipe.TYPE_SHRINKING:
+                pipe.gap_size = params['gap']
             pipe.config.PIPE_SPEED = params['speed']
 

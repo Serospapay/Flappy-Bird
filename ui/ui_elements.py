@@ -1,12 +1,18 @@
 """
 @file: ui_elements.py
 @description: UI елементи для гри (кнопки, тексти, панелі) з покращеною стилізацією.
-@dependencies: pygame, math
+@dependencies: pygame
 @created: 2024-12-19
 """
 
 import pygame
-import math
+
+try:
+    from ui.theme import SHADOW_COLOR, SHADOW_OFFSET, BORDER_RADIUS
+except ImportError:
+    SHADOW_COLOR = (17, 17, 17)
+    SHADOW_OFFSET = (2, 2)
+    BORDER_RADIUS = 10
 
 # Глобальний менеджер кешу (створюється при першому використанні)
 _cache_manager = None
@@ -26,29 +32,31 @@ def get_cache_manager():
     return _cache_manager
 
 class Button:
-    """Стилізована кнопка з hover ефектами."""
+    """Стилізована кнопка з hover ефектами та заокругленими кутами."""
     
     def __init__(self, x, y, width, height, text, font, callback=None,
                  bg_color=(100, 150, 200), hover_color=(150, 200, 255),
-                 text_color=(255, 255, 255), border_color=(255, 255, 255),
-                 border_width=2, shadow=True):
+                 text_color=(255, 255, 255), border_color=None,
+                 border_width=0, shadow=True, border_radius=10, hover_scale=1.0):
         """
         Ініціалізація кнопки.
         
         Args:
-            x: int - Координата X
-            y: int - Координата Y
+            x: int - Координата X (центр)
+            y: int - Координата Y (центр)
             width: int - Ширина
             height: int - Висота
             text: str - Текст кнопки
             font: pygame.font.Font - Шрифт
             callback: function - Функція виклику при натисканні
             bg_color: tuple - Колір фону
-            hover_color: tuple - Колір при наведенні
+            hover_color: tuple - Колір при наведенні (світліший)
             text_color: tuple - Колір тексту
-            border_color: tuple - Колір межі
-            border_width: int - Товщина межі
+            border_color: tuple | None - Колір межі (None = без обводки)
+            border_width: int - Товщина межі (0 = без обводки)
             shadow: bool - Чи показувати тінь
+            border_radius: int - Радіус заокруглення кутів (pygame-ce)
+            hover_scale: float - Масштаб при наведенні (1.0 = без збільшення)
         """
         self.rect = pygame.Rect(x - width // 2, y - height // 2, width, height)
         self.text = text
@@ -61,6 +69,8 @@ class Button:
         self.border_color = border_color
         self.border_width = border_width
         self.shadow = shadow
+        self.border_radius = min(border_radius, width // 2, height // 2)
+        self.hover_scale = hover_scale
         
         self.hovered = False
         self.clicked = False
@@ -88,66 +98,51 @@ class Button:
     
     def draw(self, screen):
         """
-        Малювання кнопки.
+        Малювання кнопки з заокругленими кутами та hover ефектом.
         
         Args:
             screen: pygame.Surface - Екран для малювання
         """
+        # Hover: невелике збільшення (якщо hover_scale > 1.0)
+        scale = self.hover_scale if self.hovered else 1.0
+        w = int(self.rect.width * scale)
+        h = int(self.rect.height * scale)
+        cx, cy = self.rect.center
+        draw_rect = pygame.Rect(cx - w // 2, cy - h // 2, w, h)
+        rad = min(self.border_radius, w // 2, h // 2)
+        
         # Тінь
         if self.shadow:
-            shadow_offset = 5
-            shadow_rect = self.rect.move(shadow_offset, shadow_offset)
-            shadow_surface = pygame.Surface((self.rect.width, self.rect.height), pygame.SRCALPHA)
-            shadow_surface.fill((0, 0, 0, 100))
-            screen.blit(shadow_surface, shadow_rect)
+            shadow_rect = draw_rect.move(2, 2)
+            shadow_surf = pygame.Surface((shadow_rect.width, shadow_rect.height), pygame.SRCALPHA)
+            pygame.draw.rect(shadow_surf, (0, 0, 0, 80),
+                            (0, 0, shadow_rect.width, shadow_rect.height),
+                            border_radius=rad)
+            screen.blit(shadow_surf, shadow_rect)
         
-        # Анімація hover
-        scale = 1.0
-        if self.hovered:
-            scale = 1.05 + 0.02 * math.sin(self.animation_time * 10)
-        else:
-            scale = 1.0
-        
-        scaled_rect = pygame.Rect(
-            self.rect.centerx - int(self.rect.width * scale / 2),
-            self.rect.centery - int(self.rect.height * scale / 2),
-            int(self.rect.width * scale),
-            int(self.rect.height * scale)
-        )
-        
-        # Вибір кольору
+        # Колір (світліший при hover)
         color = self.hover_color if self.hovered else self.bg_color
         
-        # Градієнт фону
-        gradient_surface = pygame.Surface((scaled_rect.width, scaled_rect.height), pygame.SRCALPHA)
+        # Фон з заокругленими кутами
+        pygame.draw.rect(screen, color, draw_rect, border_radius=rad)
         
-        # Створення градієнту
-        for y in range(scaled_rect.height):
-            ratio = y / scaled_rect.height
-            r = int(color[0] * (1 - ratio * 0.2))
-            g = int(color[1] * (1 - ratio * 0.2))
-            b = int(color[2] * (1 - ratio * 0.2))
-            pygame.draw.line(gradient_surface, (r, g, b), (0, y), (scaled_rect.width, y))
+        # Тонка обводка лише якщо задана
+        if self.border_width > 0 and self.border_color:
+            pygame.draw.rect(screen, self.border_color, draw_rect,
+                             width=self.border_width, border_radius=rad)
         
-        screen.blit(gradient_surface, scaled_rect)
-        
-        # Межа
-        pygame.draw.rect(screen, self.border_color, scaled_rect, self.border_width)
-        
-        # Текст
+        # Текст: малюємо рівно двічі — тінь, потім основний
         text_surface = self.font.render(self.text, True, self.text_color)
-        text_rect = text_surface.get_rect(center=scaled_rect.center)
-        
-        # Тінь тексту
-        shadow_text = self.font.render(self.text, True, (0, 0, 0))
-        screen.blit(shadow_text, text_rect.move(2, 2))
-        screen.blit(text_surface, text_rect)
+        text_rect = text_surface.get_rect(center=draw_rect.center)
+        shadow_surf = self.font.render(self.text, True, SHADOW_COLOR)
+        screen.blit(shadow_surf, (text_rect.x + 2, text_rect.y + 2))
+        screen.blit(text_surface, (text_rect.x, text_rect.y))
 
 class Text:
-    """Стилізований текст з тінню та обведенням."""
+    """Стилізований текст з єдиною тінню (shadow_color #111111, offset +2)."""
     
-    def __init__(self, text, font, color=(255, 255, 255), 
-                 shadow=True, shadow_color=(0, 0, 0), shadow_offset=(2, 2),
+    def __init__(self, text, font, color=(255, 255, 255),
+                 shadow=True, shadow_color=None, shadow_offset=None,
                  outline=False, outline_color=(0, 0, 0), outline_width=1):
         """
         Ініціалізація тексту.
@@ -167,8 +162,8 @@ class Text:
         self.font = font
         self.color = color
         self.shadow = shadow
-        self.shadow_color = shadow_color
-        self.shadow_offset = shadow_offset
+        self.shadow_color = shadow_color if shadow_color is not None else SHADOW_COLOR
+        self.shadow_offset = shadow_offset if shadow_offset is not None else SHADOW_OFFSET
         self.outline = outline
         self.outline_color = outline_color
         self.outline_width = outline_width
@@ -229,26 +224,20 @@ class Text:
         else:
             rect.topleft = position
         
-        # Тінь
+        # Тінь: малюємо рівно двічі (як у Button)
         if self.shadow and not self.outline:
             shadow_surf = self.font.render(self.text, True, self.shadow_color)
-            shadow_rect = shadow_surf.get_rect()
-            if center:
-                shadow_rect.center = (position[0] + self.shadow_offset[0], 
-                                     position[1] + self.shadow_offset[1])
-            else:
-                shadow_rect.topleft = (position[0] + self.shadow_offset[0],
-                                      position[1] + self.shadow_offset[1])
-            screen.blit(shadow_surf, shadow_rect)
-        
+            sx = rect.x + self.shadow_offset[0]
+            sy = rect.y + self.shadow_offset[1]
+            screen.blit(shadow_surf, (sx, sy))
         screen.blit(surface, rect)
 
 class Panel:
-    """Стилізована панель з градієнтом та тінню."""
+    """Стилізована панель з заокругленими кутами (border_radius)."""
     
-    def __init__(self, x, y, width, height, 
-                 bg_color=(50, 50, 80), alpha=200,
-                 border_color=(150, 150, 200), border_width=2,
+    def __init__(self, x, y, width, height,
+                 bg_color=(30, 40, 60), alpha=200,
+                 border_color=(100, 130, 170), border_width=1,
                  shadow=True, corner_radius=10):
         """
         Ініціалізація панелі.
@@ -280,40 +269,28 @@ class Panel:
         Args:
             screen: pygame.Surface - Екран для малювання
         """
-        # Тінь
+        rad = min(self.corner_radius, self.rect.width // 2, self.rect.height // 2)
         if self.shadow:
-            shadow_rect = self.rect.move(5, 5)
-            shadow_surface = pygame.Surface((self.rect.width, self.rect.height), pygame.SRCALPHA)
-            shadow_surface.fill((0, 0, 0, 100))
-            screen.blit(shadow_surface, shadow_rect)
+            shadow_rect = self.rect.move(2, 2)
+            shadow_surf = pygame.Surface((self.rect.width, self.rect.height), pygame.SRCALPHA)
+            pygame.draw.rect(shadow_surf, (0, 0, 0, 80), (0, 0, self.rect.width, self.rect.height), border_radius=rad)
+            screen.blit(shadow_surf, shadow_rect)
         
-        # Спробувати отримати з кешу
         cache = get_cache_manager()
         if cache:
             panel_surface = cache.get_panel_surface(
                 self.rect.width, self.rect.height,
                 self.bg_color, self.alpha,
-                self.border_color, self.border_width
+                self.border_color, self.border_width,
+                border_radius=rad
             )
         else:
-            # Fallback - малювання без кешу
             panel_surface = pygame.Surface((self.rect.width, self.rect.height), pygame.SRCALPHA)
-            
-            # Градієнт фону
-            for y in range(self.rect.height):
-                ratio = y / max(1, self.rect.height)
-                r = int(self.bg_color[0] * (1 + ratio * 0.3))
-                g = int(self.bg_color[1] * (1 + ratio * 0.3))
-                b = int(self.bg_color[2] * (1 + ratio * 0.3))
-                r = min(255, r)
-                g = min(255, g)
-                b = min(255, b)
-                pygame.draw.line(panel_surface, (r, g, b, self.alpha), (0, y), (self.rect.width, y))
-            
-            # Межа
-            pygame.draw.rect(panel_surface, self.border_color, 
-                            (0, 0, self.rect.width, self.rect.height), 
-                            self.border_width)
+            fill_color = (*self.bg_color, self.alpha)
+            pygame.draw.rect(panel_surface, fill_color, (0, 0, self.rect.width, self.rect.height), border_radius=rad)
+            if self.border_width > 0:
+                pygame.draw.rect(panel_surface, self.border_color, (0, 0, self.rect.width, self.rect.height),
+                                 width=self.border_width, border_radius=rad)
         
         screen.blit(panel_surface, self.rect)
 

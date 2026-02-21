@@ -24,6 +24,9 @@ class GameConfig:
     # Фізика птаха
     GRAVITY = 0.6
     JUMP_STRENGTH = -10
+    DASH_SPEED = -18  # Швидкість ривку вгору
+    DASH_COOLDOWN = 120  # Кадрів (2 сек)
+    GHOST_DURATION = 90  # Кадрів (1.5 сек) - прохід крізь труби
     
     # Параметри труб
     PIPE_WIDTH = 80

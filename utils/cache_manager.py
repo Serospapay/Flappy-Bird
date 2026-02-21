@@ -24,43 +24,22 @@ class CacheManager:
         # Максимальний розмір кешу (щоб не витрачати занадто багато пам'яті)
         self.max_cache_size = 100
     
-    def get_panel_surface(self, width, height, bg_color, alpha, border_color, border_width):
+    def get_panel_surface(self, width, height, bg_color, alpha, border_color, border_width, border_radius=10):
         """
         Отримати закешовану поверхню панелі або створити нову.
-        
-        Args:
-            width: int - Ширина
-            height: int - Висота
-            bg_color: tuple - Колір фону
-            alpha: int - Прозорість
-            border_color: tuple - Колір межі
-            border_width: int - Товщина межі
-            
-        Returns:
-            pygame.Surface - Поверхня панелі
         """
-        cache_key = (width, height, bg_color, alpha, border_color, border_width)
+        cache_key = (width, height, bg_color, alpha, border_color, border_width, border_radius)
         
         if cache_key in self.panel_cache:
             return self.panel_cache[cache_key]
         
-        # Створення нової поверхні
+        rad = min(border_radius, width // 2, height // 2)
         panel_surface = pygame.Surface((width, height), pygame.SRCALPHA)
-        
-        # Градієнт фону
-        for y in range(height):
-            ratio = y / max(1, height)
-            r = int(bg_color[0] * (1 + ratio * 0.3))
-            g = int(bg_color[1] * (1 + ratio * 0.3))
-            b = int(bg_color[2] * (1 + ratio * 0.3))
-            r = min(255, r)
-            g = min(255, g)
-            b = min(255, b)
-            pygame.draw.line(panel_surface, (r, g, b, alpha), (0, y), (width, y))
-        
-        # Межа
-        pygame.draw.rect(panel_surface, border_color, 
-                        (0, 0, width, height), border_width)
+        fill_color = (*bg_color, alpha)
+        pygame.draw.rect(panel_surface, fill_color, (0, 0, width, height), border_radius=rad)
+        if border_width > 0:
+            pygame.draw.rect(panel_surface, border_color, (0, 0, width, height),
+                             width=border_width, border_radius=rad)
         
         # Кешування
         if len(self.panel_cache) < self.max_cache_size:
@@ -85,7 +64,7 @@ class CacheManager:
         
         if cache_key in self.gradient_cache:
             return self.gradient_cache[cache_key]
-        
+
         # Створення нової градієнтної поверхні
         gradient_surface = pygame.Surface((width, height), pygame.SRCALPHA)
         

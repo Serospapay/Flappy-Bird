@@ -26,6 +26,7 @@ class SoundManager:
         self.sfx_volume = 0.7
         self.music_enabled = True
         self.sfx_enabled = True
+        self._music_mood = "calm"  # calm, tension, victory
         
         # Генерація звуків програмно (якщо немає файлів)
         self._init_sounds()
@@ -138,18 +139,14 @@ class SoundManager:
             sound.set_volume(self.sfx_volume)
             sound.play()
     
+    def set_music_mood(self, mood):
+        """Dynamic music - зміна настрою (calm/tension/victory)."""
+        self._music_mood = mood
+    
     def play_music(self, music_data=None):
-        """
-        Відтворення фонової музики.
-        
-        Args:
-            music_data: bytes - Музичні дані (опціонально)
-        """
+        """Відтворення фонової музики."""
         if not self.music_enabled:
             return
-        
-        # Якщо немає файлу музики, генеруємо просту фонову мелодію
-        # В реальному проекті тут була б загрузка mp3/ogg файлу
         pygame.mixer.music.set_volume(self.music_volume)
         
     def stop_music(self):
