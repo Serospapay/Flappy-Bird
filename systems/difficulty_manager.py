@@ -5,13 +5,6 @@
 @created: 2024-12-19
 """
 
-import sys
-import os
-
-# Додаємо батьківську директорію до шляху для імпортів
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
-from src.game_config import GameConfig
 from src.pipe import Pipe
 
 class DifficultyManager:

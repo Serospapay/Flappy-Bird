@@ -7,11 +7,6 @@
 
 import pygame
 import random
-import sys
-import os
-
-# Додаємо батьківську директорію до шляху для імпортів
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from src.game_config import GameConfig
 
@@ -203,18 +198,21 @@ class Pipe:
 class PipeManager:
     """Менеджер для керування всіма трубами."""
     
-    def __init__(self, config, random_gen=None):
+    def __init__(self, config, random_gen=None, demo_mode=False):
         """
         Ініціалізація менеджера труб.
         
         Args:
             config: Об'єкт GameConfig
+            random_gen: генератор випадковостей (опціонально)
+            demo_mode: bool - чи активний demo-режим (більше різних перешкод)
         """
         self.config = config
         self.pipes = []
         self.last_spawn_time = 0
         self.score = 0
         self._rng = random_gen or random  # Для Daily Challenge - детермінований RNG
+        self.demo_mode = demo_mode
         
     def spawn_pipe(self, current_time, score=0):
         """Створення нової труби, якщо пройшов достатній час."""
@@ -225,15 +223,25 @@ class PipeManager:
             )
             
             # Визначення типу труби в залежності від складності
-            types_pool = [Pipe.TYPE_NORMAL]
-            if score > 10:
-                types_pool.extend([Pipe.TYPE_MOVING])
-            if score > 15:
-                types_pool.extend([Pipe.TYPE_SPIKES])
-            if score > 20:
-                types_pool.extend([Pipe.TYPE_SHRINKING])
-            if score > 30:
-                types_pool.extend([Pipe.TYPE_SPLIT])
+            if self.demo_mode:
+                # Demo: спеціальні перешкоди з'являються майже одразу і частіше.
+                types_pool = [Pipe.TYPE_NORMAL, Pipe.TYPE_MOVING, Pipe.TYPE_SPIKES]
+                if score > 2:
+                    types_pool.extend([Pipe.TYPE_SHRINKING])
+                # Додаємо вагу спеціальним типам
+                types_pool.extend([
+                    Pipe.TYPE_MOVING,
+                    Pipe.TYPE_SPIKES,
+                    Pipe.TYPE_SHRINKING
+                ])
+            else:
+                types_pool = [Pipe.TYPE_NORMAL]
+                if score > 10:
+                    types_pool.extend([Pipe.TYPE_MOVING])
+                if score > 15:
+                    types_pool.extend([Pipe.TYPE_SPIKES])
+                if score > 20:
+                    types_pool.extend([Pipe.TYPE_SHRINKING])
             pipe_type = self._rng.choice(types_pool)
             
             new_pipe = Pipe(

@@ -21,5 +21,5 @@ except ImportError as e:
     sys.exit(1)
 
 print("\nAll dependencies are installed correctly!")
-print("You can run the game: python src/game.py")
+print("You can run the game: python -m src.game")
 

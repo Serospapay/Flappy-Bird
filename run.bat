@@ -7,10 +7,17 @@ echo ========================================
 echo.
 echo Перевірка залежностей...
 
-python -c "import pygame; import numpy" 2>nul
+where py >nul 2>&1
+if errorlevel 1 (
+    set "PY_CMD=python"
+) else (
+    set "PY_CMD=py -3"
+)
+
+%PY_CMD% -c "import pygame; import numpy" 2>nul
 if errorlevel 1 (
     echo [ІНФОРМАЦІЯ] Встановлення залежностей...
-    python -m pip install -r requirements.txt --user
+    %PY_CMD% -m pip install -r requirements.txt --user
     if errorlevel 1 (
         echo [ПОМИЛКА] Не вдалося встановити залежності!
         pause
@@ -23,7 +30,7 @@ echo.
 echo Запуск гри...
 echo.
 
-python src\game.py
+%PY_CMD% -m src.game
 
 if errorlevel 1 (
     echo.

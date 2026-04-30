@@ -72,7 +72,7 @@ run.bat
 
 ### Інші платформи / Ручний запуск
 ```bash
-python src/game.py
+python -m src.game
 ```
 
 ## Керування

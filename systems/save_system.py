@@ -7,6 +7,7 @@
 
 import json
 import os
+import copy
 from datetime import datetime
 
 try:
@@ -17,7 +18,10 @@ except ImportError:
 class SaveSystem:
     """Клас для роботи зі збереженням даних."""
     
-    SAVE_FILE = "save_data.json"
+    SAVE_FILE = os.path.join(
+        os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+        "save_data.json"
+    )
     
     DEFAULT_DATA = {
         "best_score": 0,
@@ -41,6 +45,11 @@ class SaveSystem:
             "powerups_used": 0
         }
     }
+
+    @staticmethod
+    def _clone_defaults():
+        """Безпечна копія дефолтної структури без спільних посилань."""
+        return copy.deepcopy(SaveSystem.DEFAULT_DATA)
     
     @staticmethod
     def load():
@@ -56,19 +65,27 @@ class SaveSystem:
                     data = json.load(f)
                     # Валідація даних
                     if not isinstance(data, dict):
-                        return SaveSystem.DEFAULT_DATA.copy()
+                        return SaveSystem._clone_defaults()
                     
                     # Об'єднання з дефолтними даними для нових полів
-                    default = SaveSystem.DEFAULT_DATA.copy()
-                    default.update(data)
+                    default = SaveSystem._clone_defaults()
+                    default.update(copy.deepcopy(data))
                     
                     # Валідація статистики
                     if "statistics" not in default or not isinstance(default["statistics"], dict):
-                        default["statistics"] = SaveSystem.DEFAULT_DATA["statistics"].copy()
+                        default["statistics"] = copy.deepcopy(SaveSystem.DEFAULT_DATA["statistics"])
+                    else:
+                        merged_statistics = copy.deepcopy(SaveSystem.DEFAULT_DATA["statistics"])
+                        merged_statistics.update(default["statistics"])
+                        default["statistics"] = merged_statistics
                     
                     # Валідація налаштувань
                     if "settings" not in default or not isinstance(default["settings"], dict):
-                        default["settings"] = SaveSystem.DEFAULT_DATA["settings"].copy()
+                        default["settings"] = copy.deepcopy(SaveSystem.DEFAULT_DATA["settings"])
+                    else:
+                        merged_settings = copy.deepcopy(SaveSystem.DEFAULT_DATA["settings"])
+                        merged_settings.update(default["settings"])
+                        default["settings"] = merged_settings
                     
                     # Валідація досягнень
                     if "achievements" not in default or not isinstance(default["achievements"], list):
@@ -87,8 +104,8 @@ class SaveSystem:
             except (json.JSONDecodeError, IOError, ValueError) as e:
                 # Логування помилки (можна додати logging)
                 print(f"Помилка завантаження збереження: {e}")
-                return SaveSystem.DEFAULT_DATA.copy()
-        return SaveSystem.DEFAULT_DATA.copy()
+                return SaveSystem._clone_defaults()
+        return SaveSystem._clone_defaults()
     
     @staticmethod
     def save(data):
@@ -104,8 +121,8 @@ class SaveSystem:
         
         try:
             # Валідація основних полів перед збереженням
-            validated_data = SaveSystem.DEFAULT_DATA.copy()
-            validated_data.update(data)
+            validated_data = SaveSystem._clone_defaults()
+            validated_data.update(copy.deepcopy(data))
             
             # Валідація числових значень
             if "best_score" in validated_data:

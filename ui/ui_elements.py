@@ -14,20 +14,21 @@ except ImportError:
     SHADOW_OFFSET = (2, 2)
     BORDER_RADIUS = 10
 
+try:
+    from utils.cache_manager import CacheManager
+except ImportError:
+    CacheManager = None
+
 # Глобальний менеджер кешу (створюється при першому використанні)
 _cache_manager = None
 
 def get_cache_manager():
     """Отримати глобальний менеджер кешу."""
     global _cache_manager
-    if _cache_manager is None:
+    if _cache_manager is None and CacheManager is not None:
         try:
-            import sys
-            import os
-            sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-            from utils.cache_manager import CacheManager
             _cache_manager = CacheManager()
-        except ImportError:
+        except Exception:
             _cache_manager = None
     return _cache_manager
 

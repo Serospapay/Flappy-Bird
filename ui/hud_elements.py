@@ -6,11 +6,6 @@
 """
 
 import pygame
-import sys
-import os
-
-# Додаємо батьківську директорію до шляху для імпортів
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from ui.ui_elements import Panel, Text
 from ui.theme import HUD_PANEL_BG, BORDER_COLOR, BORDER_WIDTH, TEXT_MUTED

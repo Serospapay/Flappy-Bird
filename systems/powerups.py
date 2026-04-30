@@ -8,11 +8,6 @@
 import math
 import pygame
 import random
-import sys
-import os
-
-# Додаємо батьківську директорію до шляху для імпортів
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from src.game_config import GameConfig
 
@@ -36,6 +31,7 @@ class PowerUp:
         self.width = 30
         self.height = 30
         self.animation_time = 0
+        self._symbol_font = pygame.font.Font(None, 24)
         
         # Кольори для різних типів
         self.colors = {
@@ -80,7 +76,6 @@ class PowerUp:
         pygame.draw.ellipse(screen, (255, 255, 255), rect, 2)
         
         # Текстове позначення залежно від типу (без emojis)
-        font = pygame.font.Font(None, 24)
         symbols = {
             'shield': 'S',
             'slow_time': 'T',
@@ -89,7 +84,7 @@ class PowerUp:
             'ghost': 'G'
         }
         symbol = symbols.get(self.type, '?')
-        text = font.render(symbol, True, (255, 255, 255))
+        text = self._symbol_font.render(symbol, True, (255, 255, 255))
         text_rect = text.get_rect(center=(self.x + self.width // 2, self.y + self.height // 2))
         screen.blit(text, text_rect)
 
@@ -115,6 +110,7 @@ class PowerUpManager:
             'double_score': {'active': False, 'duration': 0},
             'ghost': {'active': False, 'duration': 0, 'max_duration': 90}
         }
+        self._status_font = pygame.font.Font(None, 24)
     
     def spawn_powerup(self, x, y):
         """
@@ -241,23 +237,22 @@ class PowerUpManager:
         
         # Відображення активних ефектів
         y_offset = 10
-        font = pygame.font.Font(None, 24)
         
         if self.active_effects['shield']['active']:
-            text = font.render("[S] SHIELD", True, (100, 150, 255))
+            text = self._status_font.render("[S] SHIELD", True, (100, 150, 255))
             screen.blit(text, (10, y_offset))
             y_offset += 30
         
         if self.active_effects['slow_time']['active']:
-            text = font.render("[T] SLOW TIME", True, (150, 100, 255))
+            text = self._status_font.render("[T] SLOW TIME", True, (150, 100, 255))
             screen.blit(text, (10, y_offset))
             y_offset += 30
         
         if self.active_effects['double_score']['active']:
-            text = font.render("[x2] DOUBLE SCORE", True, (255, 200, 100))
+            text = self._status_font.render("[x2] DOUBLE SCORE", True, (255, 200, 100))
             screen.blit(text, (10, y_offset))
             y_offset += 30
         if self.active_effects['ghost']['active']:
-            text = font.render("[G] GHOST", True, (200, 200, 255))
+            text = self._status_font.render("[G] GHOST", True, (200, 200, 255))
             screen.blit(text, (10, y_offset))
 

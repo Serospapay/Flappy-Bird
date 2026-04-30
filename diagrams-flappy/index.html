@@ -1,0 +1,259 @@
+ <!doctype html>
+ <html lang="uk">
+   <head>
+     <meta charset="UTF-8" />
+     <meta name="viewport" content="width=device-width, initial-scale=1" />
+     <title>Flappy Bird — Діаграми (DB + UML)</title>
+     <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin />
+     <link rel="stylesheet" href="./diagrams.css" />
+   </head>
+   <body>
+     <header class="topbar">
+       <div class="topbar__left">
+         <div class="brand">
+           <div class="brand__text">
+             <div class="brand__title">Flappy Bird</div>
+             <div class="brand__subtitle">Діаграми для дипломного звіту (схематично)</div>
+           </div>
+         </div>
+       </div>
+       <div class="topbar__right">
+         <div class="segmented" role="tablist" aria-label="Діаграми">
+           <button id="tab-er" class="segmented__btn is-active" role="tab" aria-selected="true" aria-controls="panel-er">
+             Схема даних (ER)
+           </button>
+           <button id="tab-uml" class="segmented__btn" role="tab" aria-selected="false" aria-controls="panel-uml">
+             Діаграма класів (UML)
+           </button>
+         </div>
+         <div class="actions">
+           <button id="btn-fit" class="btn" type="button" title="Підігнати під екран">
+             Fit
+           </button>
+           <div class="dropdown">
+             <button id="btn-export" class="btn btn--primary" type="button" aria-haspopup="menu" aria-expanded="false">
+               Експорт
+             </button>
+             <div id="export-menu" class="dropdown__menu" role="menu" aria-label="Експорт діаграми">
+               <button class="dropdown__item" type="button" role="menuitem" data-export="svg">SVG</button>
+               <button class="dropdown__item" type="button" role="menuitem" data-export="png">PNG</button>
+             </div>
+           </div>
+         </div>
+       </div>
+     </header>
+
+     <main class="layout">
+       <section class="stage" aria-label="Полотно діаграми">
+         <div id="panel-er" class="panel is-active" role="tabpanel" aria-labelledby="tab-er">
+           <div class="paper">
+             <div id="er" class="mermaid">
+ erDiagram
+   PLAYER_PROFILE {
+     int id PK
+     int best_score
+     int total_games
+     int total_score
+   }
+
+   GAME_SETTINGS {
+     float music_volume
+     float sfx_volume
+     enum difficulty
+     enum theme
+   }
+
+   GAME_STATISTICS {
+     int id PK
+     int best_score
+     float average_score
+     int total_time_played
+     int coins_collected
+     int powerups_used
+   }
+
+   TOP_SCORE {
+     int id PK
+     int score
+     int coins
+     datetime created_at
+   }
+
+   ACHIEVEMENT {
+     string id PK
+     string name
+     string description
+   }
+
+   PLAYER_ACHIEVEMENT {
+     int id PK
+     int player_id FK
+     string achievement_id FK
+   }
+
+   SKIN {
+     string id PK
+     string name
+     int cost
+   }
+
+   PLAYER_SKIN {
+     int id PK
+     int player_id FK
+     string skin_id FK
+     boolean is_equipped
+   }
+
+   PLAYER_PROFILE ||--|| GAME_SETTINGS : "1:1"
+   PLAYER_PROFILE ||--|| GAME_STATISTICS : "1:1"
+   PLAYER_PROFILE ||--o{ TOP_SCORE : "1:N"
+   PLAYER_PROFILE ||--o{ PLAYER_ACHIEVEMENT : "1:N"
+   PLAYER_PROFILE ||--o{ PLAYER_SKIN : "1:N"
+   ACHIEVEMENT ||--o{ PLAYER_ACHIEVEMENT : "1:N"
+   SKIN ||--o{ PLAYER_SKIN : "1:N"
+             </div>
+           </div>
+         </div>
+
+         <div id="panel-uml" class="panel" role="tabpanel" aria-labelledby="tab-uml">
+           <div class="paper">
+             <div id="uml" class="mermaid">
+ classDiagram
+ direction LR
+
+ class FlappyBirdGame {
+   +state
+   +score
+   +coins
+   +run()
+   +start_game()
+   +game_over()
+ }
+
+ class GameConfig {
+   +SCREEN_WIDTH
+   +SCREEN_HEIGHT
+   +FPS
+   +GRAVITY
+   +PIPE_GAP
+ }
+
+ class Bird {
+   +skin_id
+   +velocity
+   +ghost_active
+   +jump()
+   +dash()
+   +activate_ghost(duration)
+   +update()
+ }
+
+ class Pipe {
+   +TYPE_NORMAL
+   +TYPE_MOVING
+   +TYPE_SHRINKING
+   +TYPE_SPIKES
+   +TYPE_SPLIT
+   +update(speed)
+   +get_rects()
+   +draw(screen)
+ }
+
+ class PipeManager {
+   +pipes
+   +score
+   +spawn_pipe(time, score)
+   +update(score, speed)
+   +check_collision(bird, ghost_active)
+   +check_score(bird_x)
+ }
+
+ class PowerUp {
+   +type
+   +update(speed)
+   +get_rect()
+   +draw(screen)
+ }
+
+ class PowerUpManager {
+   +powerups
+   +active_effects
+   +spawn_powerup(x, y)
+   +update(time, speed)
+   +check_collision(bird)
+   +has_shield()
+   +is_slow_time_active()
+   +is_double_score_active()
+   +is_ghost_active()
+ }
+
+ class SaveSystem {
+   <<static>>
+   +SAVE_FILE
+   +load()
+   +save(data)
+   +update_statistics(data, score, time_played, coins, powerups_used)
+   +unlock_achievement(data, id)
+ }
+
+ class Achievement {
+   +achievement_id
+   +name
+   +description
+ }
+
+ class AchievementSystem {
+   +ACHIEVEMENTS
+   +check_achievements(game_state, unlocked)
+   +get_achievement(id)
+ }
+
+ class GameModes {
+   +MODE_NORMAL
+   +MODE_DAILY
+   +MODE_CHALLENGE
+   +CHALLENGES
+   +get_daily_seed()
+   +get_daily_random(seed)
+   +get_challenge_params(id)
+ }
+
+ FlappyBirdGame --> GameConfig
+ FlappyBirdGame --> Bird
+ FlappyBirdGame --> PipeManager
+ FlappyBirdGame --> PowerUpManager
+ FlappyBirdGame --> SaveSystem
+ FlappyBirdGame --> AchievementSystem
+ FlappyBirdGame --> GameModes
+
+ PipeManager --> Pipe
+ PowerUpManager --> PowerUp
+
+ SaveSystem ..> Achievement : "achievement_id"
+ AchievementSystem --> Achievement
+
+ GameModes ..> GameConfig : "впливає на параметри гри"
+             </div>
+           </div>
+         </div>
+
+       </section>
+     </main>
+
+     <footer class="footer">
+       <div class="footer__left">
+         <span class="dot"></span>
+         Локальна сторінка: відкрийте <code>diagrams-flappy/index.html</code> у браузері
+       </div>
+       <div class="footer__right">
+         Mermaid (ELK авто-лейаут) • Pan/Zoom • Export SVG/PNG
+       </div>
+     </footer>
+
+     <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+     <script src="https://cdn.jsdelivr.net/npm/svg-pan-zoom@3.6.1/dist/svg-pan-zoom.min.js"></script>
+     <script src="https://cdn.jsdelivr.net/npm/canvg@4.0.1/lib/umd.js"></script>
+     <script src="./diagrams.js"></script>
+   </body>
+ </html>
+

@@ -6,11 +6,6 @@
 """
 
 import pygame
-import sys
-import os
-
-# Додаємо батьківську директорію до шляху для імпортів
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from ui.ui_elements import Panel, Text
 from ui.theme import PANEL_DARK, BORDER_COLOR, BORDER_WIDTH, ACCENT_PRIMARY, ACCENT_HOVER, TEXT_MUTED
@@ -50,6 +45,7 @@ class Slider:
         self.fill_color = ACCENT_PRIMARY
         self.handle_color = ACCENT_HOVER
         self.handle_hover_color = (200, 230, 255)
+        self.value_font = pygame.font.Font(None, 24)
         
     def get_ratio(self):
         """Отримати співвідношення значення (0.0 - 1.0)."""
@@ -161,7 +157,7 @@ class Slider:
         
         pygame.draw.rect(screen, handle_color, handle_rect, border_radius=10)
         
-        Text(f"{int(self.value * 100)}%", pygame.font.Font(None, 24),
+        Text(f"{int(self.value * 100)}%", self.value_font,
              color=(255, 255, 255), shadow=True).draw(
             screen, (self.rect.right - 60, self.rect.centery), center=True)
 

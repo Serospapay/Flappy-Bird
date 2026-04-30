@@ -10,10 +10,6 @@ import pygame
 import sys
 import time
 import random
-import os
-
-# Додаємо батьківську директорію до шляху для імпортів
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from src.bird import Bird
 from src.pipe import PipeManager
@@ -51,7 +47,7 @@ class FlappyBirdGame:
         
         self.config = GameConfig()
         self.screen = pygame.display.set_mode((self.config.SCREEN_WIDTH, self.config.SCREEN_HEIGHT))
-        pygame.display.set_caption("Flappy Bird - Enhanced Edition")
+        pygame.display.set_caption("Neon Drift Quest - Demo Edition")
         self.clock = pygame.time.Clock()
         
         # Завантаження даних збереження
@@ -60,7 +56,8 @@ class FlappyBirdGame:
         
         # Демо-режим: відкрити все
         DEMO_MODE = True
-        if DEMO_MODE:
+        self.demo_mode = DEMO_MODE
+        if self.demo_mode:
             self.save_data["unlocked_skins"] = list(SkinSystem.SKINS.keys())
             self.save_data["achievements"] = list(AchievementSystem.ACHIEVEMENTS.keys())
             self.save_data["statistics"] = self.save_data.get("statistics", {})
@@ -117,7 +114,12 @@ class FlappyBirdGame:
         self.combo_counter.show_minimum = True  # Показувати тільки важливі комбінації
         self.difficulty_indicator = DifficultyIndicator(10, 80, 200, 50, self.font_tiny)
         self.difficulty_indicator.show = False  # Приховати за замовчуванням (не відволікає)
-        self.powerup_indicators = []  # Індикатори активних power-ups
+        self.powerup_indicators = {}  # Індикатори активних power-ups (type -> PowerUpIndicator)
+        self.powerup_spawn_interval_ms = 5000
+        self.challenge_params = {}
+        self._last_tension_flash_ms = 0
+        self._last_powerup_spawn_attempt_ms = 0
+        self._jump_count = 0
         
         # UI елементи
         self.menu_buttons = []
@@ -259,8 +261,13 @@ class FlappyBirdGame:
         skin_id = self.save_data.get("equipped_skin", "default")
         self.bird = Bird(self.config.SCREEN_WIDTH // 4, self.config.SCREEN_HEIGHT // 2, skin_id)
         rng = GameModes.get_daily_random() if self.game_mode == GameModes.MODE_DAILY else None
-        self.pipe_manager = PipeManager(self.config, rng)
+        self.pipe_manager = PipeManager(self.config, rng, demo_mode=self.demo_mode)
         self.powerup_manager = PowerUpManager(self.config)
+        self.powerup_spawn_interval_ms = 5000
+        if self.demo_mode:
+            # Demo: частіше бонуси для швидшого проходження і демонстрації механік.
+            self.powerup_manager.spawn_chance = 0.7
+            self.powerup_spawn_interval_ms = 2000
         self.score = 0
         self.coins = 0
         self.state = 'playing'
@@ -276,11 +283,25 @@ class FlappyBirdGame:
         self.combo_counter.reset_combo()
         self.powerup_indicators.clear()
         self.camera_effects.fade_in(30)
+        self.challenge_params = {}
+        self._jump_count = 0
         
         # Відновлення базових параметрів складності
-        self.config.PIPE_GAP = 200
-        self.config.PIPE_SPEED = 4
-        self.config.PIPE_SPAWN_INTERVAL = 1800
+        self.config.PIPE_GAP = GameConfig.PIPE_GAP
+        self.config.PIPE_SPEED = GameConfig.PIPE_SPEED
+        self.config.PIPE_SPAWN_INTERVAL = GameConfig.PIPE_SPAWN_INTERVAL
+
+        # Режим challenge: параметри застосовуються централізовано при старті раунду
+        if self.game_mode == GameModes.MODE_CHALLENGE and self.challenge_id:
+            self.challenge_params = GameModes.get_challenge_params(self.challenge_id)
+            speed_mult = float(self.challenge_params.get("speed_mult", 1.0))
+            gap_mult = float(self.challenge_params.get("gap_mult", 1.0))
+            self.config.PIPE_SPEED = max(1.0, self.config.PIPE_SPEED * speed_mult)
+            self.config.PIPE_GAP = max(self.config.MIN_PIPE_GAP, int(self.config.PIPE_GAP * gap_mult))
+
+        now_ms = pygame.time.get_ticks()
+        self._last_tension_flash_ms = now_ms
+        self._last_powerup_spawn_attempt_ms = now_ms
         
         self.sound_manager.play_sound('jump')
     
@@ -366,6 +387,7 @@ class FlappyBirdGame:
                             self.camera_effects.fade_in(10)
                         elif self.bird:
                             self.bird.jump()
+                            self._jump_count += 1
                             self.sound_manager.play_sound('jump')
                 
                 elif self.state == 'settings':
@@ -416,6 +438,7 @@ class FlappyBirdGame:
         if self.state == 'playing' and not self.paused:
             if self.bird is None or self.pipe_manager is None or self.powerup_manager is None:
                 return
+            now_ms = pygame.time.get_ticks()
             
             # Застосування складності
             self.difficulty_manager.apply_difficulty(self.pipe_manager, self.score)
@@ -426,29 +449,38 @@ class FlappyBirdGame:
             
             # Оновлення індикаторів power-ups (компактно внизу)
             active_effects = self.powerup_manager.active_effects
-            self.powerup_indicators.clear()
             x_start = self.config.SCREEN_WIDTH - 80  # Справа
             y_start = self.config.SCREEN_HEIGHT - 70  # Знизу
             
             active_count = sum(1 for e in active_effects.values() if e['active'])
             spacing = 55 if active_count > 0 else 0
+            active_types = []
             
             for i, (effect_name, effect_data) in enumerate(active_effects.items()):
                 if effect_data['active']:
-                    indicator = PowerUpIndicator(
-                        effect_name,
-                        effect_data['duration'],
-                        effect_data.get('max_duration', 600),
-                        x_start,
-                        y_start - i * spacing,  # Знизу вгору
-                        self.font_tiny
-                    )
-                    self.powerup_indicators.append(indicator)
-            
-            # Оновлення індикаторів
-            for indicator in self.powerup_indicators:
-                if self.powerup_manager.active_effects[indicator.type]['active']:
-                    indicator.update(self.powerup_manager.active_effects[indicator.type]['duration'])
+                    active_types.append(effect_name)
+                    target_y = y_start - i * spacing
+                    indicator = self.powerup_indicators.get(effect_name)
+                    if indicator is None:
+                        indicator = PowerUpIndicator(
+                            effect_name,
+                            effect_data['duration'],
+                            effect_data.get('max_duration', 600),
+                            x_start,
+                            target_y,
+                            self.font_tiny
+                        )
+                        self.powerup_indicators[effect_name] = indicator
+                    else:
+                        indicator.x = x_start
+                        indicator.y = target_y
+                        indicator.max_duration = effect_data.get('max_duration', 600)
+                        indicator.update(effect_data['duration'])
+
+            # Видаляємо неактивні індикатори, щоб не накопичувати зайві об'єкти
+            stale_types = [t for t in self.powerup_indicators.keys() if t not in active_types]
+            for stale_type in stale_types:
+                del self.powerup_indicators[stale_type]
             
             # Застосування повільного часу (впливає на фон, труби та power-ups)
             speed_multiplier = self.powerup_manager.get_speed_multiplier()
@@ -464,7 +496,7 @@ class FlappyBirdGame:
             self.pipe_manager.update(self.score, actual_speed)
             
             # Оновлення power-ups (з урахуванням slow_time)
-            self.powerup_manager.update(pygame.time.get_ticks(), actual_speed)
+            self.powerup_manager.update(now_ms, actual_speed)
             
             # Синхронізація Ghost з power-up до птаха
             if self.powerup_manager.is_ghost_active():
@@ -473,7 +505,10 @@ class FlappyBirdGame:
                 self.bird.ghost_duration = eff['duration']
             
             # Перевірка колізій з power-ups
-            collected_powerups = self.powerup_manager.check_collision(self.bird)
+            no_powerups_mode = bool(self.challenge_params.get("no_powerups", False))
+            if no_powerups_mode and self.powerup_manager.powerups:
+                self.powerup_manager.powerups.clear()
+            collected_powerups = [] if no_powerups_mode else self.powerup_manager.check_collision(self.bird)
             for powerup_type in collected_powerups:
                 if powerup_type == 'coin':
                     self.coins += 1
@@ -508,15 +543,15 @@ class FlappyBirdGame:
                 
                 # Перевірка наближення до труби (небезпека)
                 if self.pipe_manager and self.pipe_manager.pipes:
-                    try:
-                        closest_pipe = min(self.pipe_manager.pipes, 
-                                         key=lambda p: abs(p.x - self.bird.x) if p.x + p.width > self.bird.x else float('inf'))
-                        if closest_pipe and closest_pipe.x - self.bird.x < 100 and closest_pipe.x - self.bird.x > 0:
+                    forward_pipes = [p for p in self.pipe_manager.pipes if p.x + p.width > self.bird.x]
+                    if forward_pipes:
+                        closest_pipe = min(forward_pipes, key=lambda p: p.x - self.bird.x)
+                        distance = closest_pipe.x - self.bird.x
+                        if 0 < distance < 100:
                             self.sound_manager.set_music_mood("tension")
-                            if pygame.time.get_ticks() % 500 < 16:
+                            if now_ms - self._last_tension_flash_ms >= 500:
                                 self.flash_system.add_danger_flash()
-                    except (ValueError, AttributeError):
-                        pass  # Немає валідних труб
+                                self._last_tension_flash_ms = now_ms
             
             # Перевірка виходу за межі екрану
             if self.bird.y + self.bird.height > self.config.SCREEN_HEIGHT or self.bird.y < 0:
@@ -579,17 +614,25 @@ class FlappyBirdGame:
                     self.flash_system.add_score_flash()
             
             # Спорадична генерація power-ups
-            if len(collected_powerups) == 0 and len(self.powerup_manager.powerups) == 0:
-                if pygame.time.get_ticks() % 5000 < 16:  # Приблизно кожні 5 секунд
-                    if self.score > 5 and len(self.pipe_manager.pipes) > 0:
-                        last_pipe = self.pipe_manager.pipes[-1]
-                        if last_pipe.x < self.config.SCREEN_WIDTH - 200:
-                            if self.powerup_manager.spawn_chance > random.random():
-                                gap_center = last_pipe.gap_y + last_pipe.gap_size // 2
-                                self.powerup_manager.spawn_powerup(
-                                    self.config.SCREEN_WIDTH,
-                                    gap_center
-                                )
+            if (not no_powerups_mode and len(collected_powerups) == 0 and len(self.powerup_manager.powerups) == 0
+                and now_ms - self._last_powerup_spawn_attempt_ms >= self.powerup_spawn_interval_ms):
+                self._last_powerup_spawn_attempt_ms = now_ms
+                required_score = 0 if self.demo_mode else 5
+                if self.score >= required_score and len(self.pipe_manager.pipes) > 0:
+                    last_pipe = self.pipe_manager.pipes[-1]
+                    if last_pipe.x < self.config.SCREEN_WIDTH - 200:
+                        if self.powerup_manager.spawn_chance > random.random():
+                            gap_center = last_pipe.gap_y + last_pipe.gap_size // 2
+                            self.powerup_manager.spawn_powerup(
+                                self.config.SCREEN_WIDTH,
+                                gap_center
+                            )
+
+            # Обмеження challenge-режимів (якщо ввімкнені)
+            max_jumps = self.challenge_params.get("max_jumps")
+            if max_jumps is not None and self._jump_count > int(max_jumps):
+                self.game_over()
+                return
             
             # Оновлення частинок
             self.particle_system.update()
@@ -674,14 +717,14 @@ class FlappyBirdGame:
         self.screen.blit(overlay, (0, 0))
         
         cx = self.config.SCREEN_WIDTH // 2
-        title_str = "Flappy Bird"
+        title_str = "Neon Drift Quest"
         title_surf = self.font_large.render(title_str, True, TEXT_ACCENT)
         title_rect = title_surf.get_rect(center=(cx, 75))
         shadow_surf = self.font_large.render(title_str, True, SHADOW_COLOR)
         self.screen.blit(shadow_surf, (title_rect.x + 2, title_rect.y + 2))
         self.screen.blit(title_surf, title_rect)
         
-        Text("Enhanced Edition", self.font_small, color=TEXT_MUTED, shadow=True,
+        Text("Arcade Demo Edition", self.font_small, color=TEXT_MUTED, shadow=True,
              outline=False).draw(self.screen, (cx, 125), center=True)
         
         for button in self.menu_buttons:
@@ -755,7 +798,7 @@ class FlappyBirdGame:
         # self.difficulty_indicator.draw(self.screen)  # Приховано для мінімального відволікання
         
         # Power-up indicators (компактні, справа знизу)
-        for indicator in self.powerup_indicators:
+        for indicator in self.powerup_indicators.values():
             indicator.draw(self.screen)
         
         # Toast notifications (менш нав'язливі, коротші)

@@ -7,7 +7,14 @@ echo  Flappy Bird - Enhanced Edition
 echo ========================================
 echo.
 
-python --version >nul 2>&1
+where py >nul 2>&1
+if errorlevel 1 (
+    set "PY_CMD=python"
+) else (
+    set "PY_CMD=py -3"
+)
+
+%PY_CMD% --version >nul 2>&1
 if errorlevel 1 (
     echo [ПОМИЛКА] Python не знайдено!
     echo Переконайтеся, що Python встановлено і додано в PATH.
@@ -16,11 +23,11 @@ if errorlevel 1 (
 )
 
 echo [ІНФОРМАЦІЯ] Версія Python:
-python --version
+%PY_CMD% --version
 echo.
 
 echo [ІНФОРМАЦІЯ] Встановлення залежностей з requirements.txt...
-python -m pip install -r requirements.txt --user
+%PY_CMD% -m pip install -r requirements.txt --user
 
 if errorlevel 1 (
     echo.
@@ -33,7 +40,7 @@ echo.
 echo [УСПІХ] Всі залежності встановлено успішно!
 echo.
 echo Тепер ви можете запустити гру командою: run.bat
-echo або: python game.py
+echo або: py -3 -m src.game
 echo.
 pause
 

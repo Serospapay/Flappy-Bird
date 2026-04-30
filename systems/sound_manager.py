@@ -1,13 +1,11 @@
 """
 @file: sound_manager.py
 @description: Менеджер звуку для гри (фонова музика та звукові ефекти).
-@dependencies: pygame, math, os, numpy (optional)
+@dependencies: pygame, numpy (optional)
 @created: 2024-12-19
 """
 
 import pygame
-import math
-import os
 
 try:
     import numpy as np
@@ -20,16 +18,23 @@ class SoundManager:
     
     def __init__(self):
         """Ініціалізація менеджера звуку."""
-        pygame.mixer.init(frequency=22050, size=-16, channels=2, buffer=512)
+        self.audio_available = True
+        try:
+            pygame.mixer.init(frequency=22050, size=-16, channels=2, buffer=512)
+        except pygame.error as e:
+            self.audio_available = False
+            print(f"Попередження: аудіо недоступне, гра працює в silent mode ({e})")
         
         self.music_volume = 0.5
         self.sfx_volume = 0.7
-        self.music_enabled = True
-        self.sfx_enabled = True
+        self.music_enabled = self.audio_available
+        self.sfx_enabled = self.audio_available
         self._music_mood = "calm"  # calm, tension, victory
         
         # Генерація звуків програмно (якщо немає файлів)
-        self._init_sounds()
+        self.sounds = {}
+        if self.audio_available:
+            self._init_sounds()
         
     def _init_sounds(self):
         """Ініціалізація звуків (генеруємо програмно)."""
@@ -64,34 +69,20 @@ class SoundManager:
         """
         frames = int(duration * sample_rate)
         
-        if HAS_NUMPY:
-            # Генерація звукової хвилі через numpy для правильного типу даних
-            t = np.linspace(0, duration, frames, False)
-            wave = 4096 * np.sin(2.0 * np.pi * frequency * t)
-            
-            # Створення стерео сигналу (2 канали)
-            # Обмеження значень до int16 (-32768 до 32767)
-            wave = np.clip(wave, -32767, 32767).astype(np.int16)
-            stereo_wave = np.column_stack((wave, wave))
-            
-            # Створення звуку з правильним типом даних
-            return pygame.sndarray.make_sound(stereo_wave)
-        else:
-            # Fallback без numpy - використовуємо список з явним int16
-            arr = []
-            for i in range(frames):
-                wave_value = int(4096 * math.sin(2.0 * math.pi * frequency * i / sample_rate))
-                # Обмеження до int16 діапазону
-                wave_value = max(-32767, min(32767, wave_value))
-                arr.append([wave_value, wave_value])
-            
-            # Конвертація в numpy array з правильним типом (якщо доступний)
-            # або використання pygame.sndarray
-            sound_array = pygame.sndarray.array(arr)
-            # Явна конвертація до int16 через numpy якщо доступний
-            if hasattr(sound_array, 'astype'):
-                sound_array = sound_array.astype('int16')
-            return pygame.sndarray.make_sound(sound_array)
+        if not HAS_NUMPY or not self.audio_available:
+            return None
+
+        # Генерація звукової хвилі через numpy для правильного типу даних
+        t = np.linspace(0, duration, frames, False)
+        wave = 4096 * np.sin(2.0 * np.pi * frequency * t)
+        
+        # Створення стерео сигналу (2 канали)
+        # Обмеження значень до int16 (-32768 до 32767)
+        wave = np.clip(wave, -32767, 32767).astype(np.int16)
+        stereo_wave = np.column_stack((wave, wave))
+        
+        # Створення звуку з правильним типом даних
+        return pygame.sndarray.make_sound(stereo_wave)
     
     def _generate_jump_sound(self):
         """Генерація звуку стрибка."""
@@ -136,6 +127,8 @@ class SoundManager:
             
         if sound_name in self.sounds:
             sound = self.sounds[sound_name]
+            if sound is None:
+                return
             sound.set_volume(self.sfx_volume)
             sound.play()
     
@@ -145,12 +138,14 @@ class SoundManager:
     
     def play_music(self, music_data=None):
         """Відтворення фонової музики."""
-        if not self.music_enabled:
+        if not self.music_enabled or not self.audio_available:
             return
         pygame.mixer.music.set_volume(self.music_volume)
         
     def stop_music(self):
         """Зупинка фонової музики."""
+        if not self.audio_available:
+            return
         pygame.mixer.music.stop()
     
     def set_music_volume(self, volume):
@@ -161,7 +156,8 @@ class SoundManager:
             volume: float - Гучність (0.0 - 1.0)
         """
         self.music_volume = max(0.0, min(1.0, volume))
-        pygame.mixer.music.set_volume(self.music_volume)
+        if self.audio_available:
+            pygame.mixer.music.set_volume(self.music_volume)
     
     def set_sfx_volume(self, volume):
         """
